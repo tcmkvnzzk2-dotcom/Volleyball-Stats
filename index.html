@@ -309,7 +309,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <section class="card tools">
 <h2>Verbindung</h2>
 <button class="secondary" id="reloadBtn">🔄 Daten neu laden</button>
-<button id="printBtn">🖨️ Statistik drucken</button>
+<button id="printBtn" type="button" onclick="window.print()">🖨️ Statistik drucken</button>
 <p id="connection" class="small">Verbindung wird geprüft …</p>
 <div id="debugBox"></div>
 </section>
@@ -1189,16 +1189,6 @@ function renderAll(){
 $("addBtn").addEventListener("click",addPlayer);
 $("saveBtn").addEventListener("click",saveGame);
 $("reloadBtn").addEventListener("click",loadData);
-$("printBtn").addEventListener("click",()=>{
-  pauseAutoSync();
-  try{
-    window.print();
-  }catch(e){
-    resumeAutoSync();
-    alert("Druckansicht konnte nicht geöffnet werden.");
-  }
-  setTimeout(resumeAutoSync,1500);
-});
 $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
 $("quickSaveBtn").addEventListener("click",saveMixedGame);
