@@ -9,11 +9,11 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f3f5f7;color:#17212b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
-header{background:#102b46;color:#fff;padding:22px 16px}
+header{background:#102b46;color:white;padding:22px 16px}
 header h1{margin:0;font-size:24px}
 header p{margin:5px 0 0;font-size:13px;opacity:.85}
 main{max-width:900px;margin:auto;padding:12px}
-.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #00000010}
+.card{background:white;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #00000010}
 button,input,select{width:100%;min-height:48px;font-size:16px;border-radius:11px;padding:9px;border:1px solid #d9e0e6}
 button{background:#1266d6;color:#fff;border:0;font-weight:700;margin-top:8px}
 button:disabled{opacity:.55}
@@ -30,9 +30,11 @@ th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}
 th:nth-child(2),td:nth-child(2){text-align:left}
 .scroll{overflow-x:auto}
 .game{border:1px solid #e0e5e9;border-radius:11px;padding:10px;margin:8px 0}
-.small{font-size:12px;color:#68737d}
+.small{font-size:12px;color:#68737d;line-height:1.45}
 .status{font-size:13px;margin-top:8px}
-.ok{color:#217a42} .err{color:#a52d2d}
+.ok{color:#217a42}
+.err{color:#a52d2d}
+.warn{background:#fff4e5;border:1px solid #ffd7a3;border-radius:10px;padding:10px;margin-top:10px}
 @media(max-width:650px){.teams{grid-template-columns:1fr}.modes{grid-template-columns:repeat(2,1fr)}}
 @media print{.entry,.tools,.history{display:none}body{background:white}.card{box-shadow:none}}
 </style>
@@ -46,7 +48,6 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <main>
 <section class="card entry">
 <h2>Neues Spiel</h2>
-
 <div class="modes" id="modes">
 <button data-a="2" data-b="2">2 : 2</button>
 <button data-a="3" data-b="3">3 : 3</button>
@@ -57,14 +58,14 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 </div>
 
 <div class="teams">
-  <div class="team"><h3>Team 1</h3><div id="team1"></div></div>
-  <div class="team"><h3>Team 2</h3><div id="team2"></div></div>
+<div class="team"><h3>Team 1</h3><div id="team1"></div></div>
+<div class="team"><h3>Team 2</h3><div id="team2"></div></div>
 </div>
 
 <h3>Sieger</h3>
 <select id="winner">
-  <option value="1">🏆 Team 1</option>
-  <option value="2">🏆 Team 2</option>
+<option value="1">🏆 Team 1</option>
+<option value="2">🏆 Team 2</option>
 </select>
 
 <button id="saveBtn" onclick="saveGame()">Spiel speichern</button>
@@ -75,11 +76,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <h2>📊 Rangliste</h2>
 <div class="scroll">
 <table>
-<thead>
-<tr>
-<th>Platz</th><th>Spieler</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th>
-</tr>
-</thead>
+<thead><tr><th>Platz</th><th>Spieler</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th></tr></thead>
 <tbody id="stats"></tbody>
 </table>
 </div>
@@ -98,19 +95,20 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 </section>
 
 <section class="card tools">
-<button onclick="window.print()">🖨️ Statistik drucken</button>
+<h2>Verbindung</h2>
 <button class="secondary" onclick="loadData()">🔄 Daten neu laden</button>
+<button onclick="window.print()">🖨️ Statistik drucken</button>
 <p id="connection" class="small">Verbindung wird geprüft …</p>
+<div id="debugBox"></div>
 </section>
 </main>
 
 <script>
-const SUPABASE_URL = 'https://tgazutavgzxgxtjxwrhb.supabase.co';
+const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 
-const headers = {
+const BASE_HEADERS = {
   "apikey": SUPABASE_KEY,
-  "Authorization": "Bearer " + SUPABASE_KEY,
   "Content-Type": "application/json"
 };
 
@@ -122,25 +120,41 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
 }[c]));
 
-function api(path, options={}) {
-  return fetch(SUPABASE_URL + "/rest/v1/" + path, {
+async function api(path, options={}) {
+  const res = await fetch(SUPABASE_REST + "/" + path, {
     ...options,
-    headers: {...headers, ...(options.headers || {})}
+    mode: "cors",
+    headers: {
+      ...BASE_HEADERS,
+      ...(options.headers || {})
+    }
   });
+  return res;
+}
+
+async function responseError(res) {
+  let body = "";
+  try { body = await res.text(); } catch(e) {}
+  return `HTTP ${res.status} ${res.statusText}${body ? " – " + body : ""}`;
+}
+
+function showDebug(message) {
+  document.getElementById("debugBox").innerHTML =
+    `<div class="warn small"><b>Technischer Hinweis:</b><br>${esc(message)}</div>`;
 }
 
 async function loadData() {
   const connection = document.getElementById("connection");
+  document.getElementById("debugBox").innerHTML = "";
   connection.textContent = "Daten werden geladen …";
+  connection.className = "small";
 
   try {
-    const [pr, gr] = await Promise.all([
-      api("players?select=id,name&order=name.asc"),
-      api("games?select=id,played_at,team1_players,team2_players,winner&order=played_at.desc")
-    ]);
+    const pr = await api("players?select=id,name&order=name.asc");
+    if (!pr.ok) throw new Error("players: " + await responseError(pr));
 
-    if (!pr.ok) throw new Error("Spieler konnten nicht geladen werden: " + await pr.text());
-    if (!gr.ok) throw new Error("Spiele konnten nicht geladen werden: " + await gr.text());
+    const gr = await api("games?select=id,played_at,team1_players,team2_players,winner&order=played_at.desc");
+    if (!gr.ok) throw new Error("games: " + await responseError(gr));
 
     players = await pr.json();
     games = await gr.json();
@@ -150,10 +164,10 @@ async function loadData() {
     render();
     renderInputs();
   } catch (e) {
-    connection.textContent = "❌ Verbindung fehlgeschlagen";
-    connection.className = "small err";
     console.error(e);
-    alert("Die Verbindung zur Online-Datenbank ist fehlgeschlagen.");
+    connection.textContent = "❌ Verbindung zur Online-Datenbank fehlgeschlagen";
+    connection.className = "small err";
+    showDebug(e.message || String(e));
   }
 }
 
@@ -203,13 +217,14 @@ async function addPlayer() {
       body: JSON.stringify({name})
     });
 
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(await responseError(r));
 
     input.value = "";
     await loadData();
   } catch(e) {
     console.error(e);
     alert("Spieler konnte nicht gespeichert werden.");
+    showDebug(e.message || String(e));
   } finally {
     btn.disabled = false;
   }
@@ -255,20 +270,18 @@ async function saveGame() {
       })
     });
 
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) throw new Error(await responseError(r));
 
     status.textContent = "✅ Spiel online gespeichert";
     status.className = "status ok";
-
     await loadData();
     renderInputs();
-
     setTimeout(()=>status.textContent="", 2000);
   } catch(e) {
     console.error(e);
     status.textContent = "❌ Speichern fehlgeschlagen";
     status.className = "status err";
-    alert("Das Spiel konnte nicht gespeichert werden.");
+    showDebug(e.message || String(e));
   } finally {
     btn.disabled = false;
   }
@@ -276,10 +289,7 @@ async function saveGame() {
 
 function calc() {
   const m = {};
-
-  players.forEach(p => {
-    m[p.id] = {n:p.name,g:0,w:0,l:0};
-  });
+  players.forEach(p => m[p.id] = {n:p.name,g:0,w:0,l:0});
 
   games.forEach(g => {
     (g.team1_players || []).forEach(id => {
@@ -287,7 +297,6 @@ function calc() {
       m[id].g++;
       g.winner === 1 ? m[id].w++ : m[id].l++;
     });
-
     (g.team2_players || []).forEach(id => {
       if (!m[id]) return;
       m[id].g++;
@@ -311,15 +320,11 @@ function nameList(ids) {
 
 function render() {
   document.getElementById("stats").innerHTML = calc().map((x,i) => `
-    <tr>
-      <td>${i+1}</td>
-      <td>${esc(x.n)}</td>
-      <td>${x.g}</td>
-      <td>${x.w}</td>
-      <td>${x.l}</td>
-      <td><b>${x.g ? (100*x.w/x.g).toFixed(1) : "0.0"} %</b></td>
-    </tr>
-  `).join("");
+  <tr>
+    <td>${i+1}</td><td>${esc(x.n)}</td><td>${x.g}</td>
+    <td>${x.w}</td><td>${x.l}</td>
+    <td><b>${x.g ? (100*x.w/x.g).toFixed(1) : "0.0"} %</b></td>
+  </tr>`).join("");
 
   document.getElementById("players").textContent =
     players.length ? players.map(p=>p.name).join(" · ") : "Noch keine Spieler.";
@@ -330,10 +335,11 @@ function render() {
         <b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>
         ${nameList(g.team1_players)} <b>gegen</b> ${nameList(g.team2_players)}<br>
         🏆 Team ${g.winner}
-      </div>
-    `).join("") : '<p class="small">Noch keine Spiele.</p>';
+      </div>`).join("") : '<p class="small">Noch keine Spiele.</p>';
 }
 
+renderInputs();
+render();
 loadData();
 </script>
 </body>
