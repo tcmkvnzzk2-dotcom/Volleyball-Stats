@@ -9,43 +9,63 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f3f5f7;color:#17212b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
-header{background:#102b46;color:white;padding:22px 16px}
+header{background:#102b46;color:#fff;padding:22px 16px}
 header h1{margin:0;font-size:24px}
 header p{margin:5px 0 0;font-size:13px;opacity:.85}
 main{max-width:900px;margin:auto;padding:12px}
-.card{background:white;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #00000010}
+.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #00000010}
+h2{margin-top:0}
 button,input,select{width:100%;min-height:48px;font-size:16px;border-radius:11px;padding:9px;border:1px solid #d9e0e6}
 button{background:#1266d6;color:#fff;border:0;font-weight:700;margin-top:8px}
 button:disabled{opacity:.55}
 .secondary{background:#65717c}
 .danger{background:#a52d2d}
+.light{background:#e8eef5;color:#17212b}
 .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .modes button{background:#e8eef5;color:#17212b}
-.modes button.active{background:#1266d6;color:white}
+.modes button.active{background:#1266d6;color:#fff}
 .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .team{background:#f8fafb;border:1px solid #dde3e8;border-radius:12px;padding:10px}
 .team select{margin-bottom:7px}
+.scroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:560px}
 th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}
 th:nth-child(2),td:nth-child(2){text-align:left}
-.scroll{overflow-x:auto}
-.game{border:1px solid #e0e5e9;border-radius:11px;padding:10px;margin:8px 0}
+.game{border:1px solid #e0e5e9;border-radius:12px;padding:12px;margin:8px 0}
+.game-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.game .danger{width:auto;min-height:40px;padding:7px 11px;margin:0}
 .small{font-size:12px;color:#68737d;line-height:1.45}
 .status{font-size:13px;margin-top:8px}
-.ok{color:#217a42}
-.err{color:#a52d2d}
+.ok{color:#217a42} .err{color:#a52d2d}
 .warn{background:#fff4e5;border:1px solid #ffd7a3;border-radius:10px;padding:10px;margin-top:10px}
-@media(max-width:650px){.teams{grid-template-columns:1fr}.modes{grid-template-columns:repeat(2,1fr)}}
-@media print{.entry,.tools,.history{display:none}body{background:white}.card{box-shadow:none}}
+.player-picks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pick{display:flex;align-items:center;gap:9px;border:1px solid #dde3e8;border-radius:10px;padding:10px;background:#fafbfc}
+.pick input{width:22px;min-height:22px;margin:0}
+.pick label{font-size:15px;min-width:0}
+.mixer-controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.mixed-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+.mixed-team{border:1px solid #dce3e8;border-radius:12px;padding:12px;background:#f8fafb}
+.mixed-team h3{margin:0 0 8px}
+.mixed-team ul{margin:0;padding-left:20px}
+.stat-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.stat-card{border:1px solid #dde3e8;border-radius:12px;padding:11px;text-align:center;background:#fafbfc}
+.stat-card strong{display:block;font-size:22px;margin:4px 0}
+@media(max-width:650px){
+  .teams{grid-template-columns:1fr}
+  .modes{grid-template-columns:repeat(2,1fr)}
+  .mixed-grid{grid-template-columns:1fr}
+  .stat-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media print{.entry,.tools,.history,.mixer{display:none}body{background:white}.card{box-shadow:none}}
 </style>
 </head>
 <body>
 <header>
-  <h1>🏐 Volleyball Statistik</h1>
-  <p>Online gespeichert · für iPhone, Tablet und PC</p>
+<h1>🏐 Volleyball Statistik</h1>
+<p>Online gespeichert · für iPhone, Tablet und PC</p>
 </header>
-
 <main>
+
 <section class="card entry">
 <h2>Neues Spiel</h2>
 <div class="modes" id="modes">
@@ -56,19 +76,13 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <button data-a="3" data-b="4">3 : 4</button>
 <button data-a="4" data-b="5">4 : 5</button>
 </div>
-
 <div class="teams">
 <div class="team"><h3>Team 1</h3><div id="team1"></div></div>
 <div class="team"><h3>Team 2</h3><div id="team2"></div></div>
 </div>
-
 <h3>Sieger</h3>
-<select id="winner">
-<option value="1">🏆 Team 1</option>
-<option value="2">🏆 Team 2</option>
-</select>
-
-<button id="saveBtn" onclick="saveGame()">Spiel speichern</button>
+<select id="winner"><option value="1">🏆 Team 1</option><option value="2">🏆 Team 2</option></select>
+<button id="saveBtn">Spiel speichern</button>
 <div id="saveStatus" class="status"></div>
 </section>
 
@@ -82,10 +96,34 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 </div>
 </section>
 
+<section class="card">
+<h2>📈 Siegquote nach Teamgröße</h2>
+<p class="small">Jede Mannschaft wird nach ihrer eigenen Größe gewertet. Bei einem 3:4-Spiel zählt das Ergebnis also einmal für die 3er- und einmal für die 4er-Team-Statistik.</p>
+<div id="sizeStats" class="stat-cards"></div>
+</section>
+
+<section class="card mixer">
+<h2>🎲 Teams mischen</h2>
+<p class="small">Wähle alle Spieler aus, die heute mitspielen, und gib an, in wie viele Teams sie aufgeteilt werden sollen.</p>
+<div id="mixerPlayers" class="player-picks"></div>
+<div class="mixer-controls">
+<button type="button" class="light" id="selectAllBtn">Alle auswählen</button>
+<select id="teamCount" aria-label="Anzahl Teams">
+<option value="2">2 Teams</option>
+<option value="3">3 Teams</option>
+<option value="4">4 Teams</option>
+<option value="5">5 Teams</option>
+</select>
+</div>
+<button type="button" id="mixBtn">🎲 Teams zufällig mischen</button>
+<div id="mixMessage" class="status"></div>
+<div id="mixedTeams" class="mixed-grid"></div>
+</section>
+
 <section class="card entry">
 <h2>👤 Spieler</h2>
 <input id="newPlayer" placeholder="Spielername">
-<button id="addBtn" onclick="addPlayer()">Spieler hinzufügen</button>
+<button id="addBtn">Spieler hinzufügen</button>
 <p class="small" id="players"></p>
 </section>
 
@@ -96,251 +134,166 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 
 <section class="card tools">
 <h2>Verbindung</h2>
-<button class="secondary" onclick="loadData()">🔄 Daten neu laden</button>
-<button onclick="window.print()">🖨️ Statistik drucken</button>
+<button class="secondary" id="reloadBtn">🔄 Daten neu laden</button>
+<button id="printBtn">🖨️ Statistik drucken</button>
 <p id="connection" class="small">Verbindung wird geprüft …</p>
 <div id="debugBox"></div>
 </section>
-</main>
 
+</main>
 <script>
 const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
+const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
-const BASE_HEADERS = {
-  "apikey": SUPABASE_KEY,
-  "Content-Type": "application/json"
-};
+let players=[], games=[], mode={a:2,b:2};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-let players = [];
-let games = [];
-let mode = {a:2,b:2};
-
-const esc = s => String(s).replace(/[&<>"']/g, c => ({
-  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-}[c]));
-
-async function api(path, options={}) {
-  const res = await fetch(SUPABASE_REST + "/" + path, {
-    ...options,
-    mode: "cors",
-    headers: {
-      ...BASE_HEADERS,
-      ...(options.headers || {})
-    }
+async function api(path,options={}){
+  return fetch(SUPABASE_REST+"/"+path,{
+    ...options,mode:"cors",
+    headers:{...BASE_HEADERS,...(options.headers||{})}
   });
-  return res;
 }
-
-async function responseError(res) {
-  let body = "";
-  try { body = await res.text(); } catch(e) {}
-  return `HTTP ${res.status} ${res.statusText}${body ? " – " + body : ""}`;
+async function responseError(res){
+  let body=""; try{body=await res.text()}catch(e){}
+  return `HTTP ${res.status} ${res.statusText}${body?" – "+body:""}`;
 }
+function showDebug(msg){ $("debugBox").innerHTML=`<div class="warn small"><b>Technischer Hinweis:</b><br>${esc(msg)}</div>`; }
 
-function showDebug(message) {
-  document.getElementById("debugBox").innerHTML =
-    `<div class="warn small"><b>Technischer Hinweis:</b><br>${esc(message)}</div>`;
-}
-
-async function loadData() {
-  const connection = document.getElementById("connection");
-  document.getElementById("debugBox").innerHTML = "";
-  connection.textContent = "Daten werden geladen …";
-  connection.className = "small";
-
-  try {
-    const pr = await api("players?select=id,name&order=name.asc");
-    if (!pr.ok) throw new Error("players: " + await responseError(pr));
-
-    const gr = await api("games?select=id,played_at,team1_players,team2_players,winner&order=played_at.desc");
-    if (!gr.ok) throw new Error("games: " + await responseError(gr));
-
-    players = await pr.json();
-    games = await gr.json();
-
-    connection.textContent = "✅ Online verbunden";
-    connection.className = "small ok";
-    render();
-    renderInputs();
-  } catch (e) {
-    console.error(e);
-    connection.textContent = "❌ Verbindung zur Online-Datenbank fehlgeschlagen";
-    connection.className = "small err";
-    showDebug(e.message || String(e));
+async function loadData(){
+  $("connection").textContent="Daten werden geladen …"; $("connection").className="small"; $("debugBox").innerHTML="";
+  try{
+    const pr=await api("players?select=id,name&order=name.asc");
+    if(!pr.ok) throw new Error("players: "+await responseError(pr));
+    const gr=await api("games?select=id,played_at,team1_players,team2_players,winner&order=played_at.desc");
+    if(!gr.ok) throw new Error("games: "+await responseError(gr));
+    players=await pr.json(); games=await gr.json();
+    $("connection").textContent="✅ Online verbunden"; $("connection").className="small ok";
+    renderAll();
+  }catch(e){
+    console.error(e); $("connection").textContent="❌ Verbindung zur Online-Datenbank fehlgeschlagen"; $("connection").className="small err"; showDebug(e.message||String(e));
   }
 }
 
-function getPlayerById(id) {
-  return players.find(p => Number(p.id) === Number(id));
+function optionHTML(){
+  return '<option value="">Spieler auswählen</option>'+players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+}
+function renderInputs(){
+  $("team1").innerHTML=Array.from({length:mode.a},(_,i)=>`<select id="a${i}">${optionHTML()}</select>`).join("");
+  $("team2").innerHTML=Array.from({length:mode.b},(_,i)=>`<select id="b${i}">${optionHTML()}</select>`).join("");
+}
+document.querySelectorAll("#modes button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+  mode={a:+b.dataset.a,b:+b.dataset.b}; renderInputs();
+}));
+document.querySelector("#modes button").classList.add("active");
+
+async function addPlayer(){
+  const name=$("newPlayer").value.trim(); if(!name)return;
+  if(players.some(p=>p.name.toLowerCase()===name.toLowerCase())) return alert("Dieser Spieler ist bereits vorhanden.");
+  $("addBtn").disabled=true;
+  try{
+    const r=await api("players",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({name})});
+    if(!r.ok) throw new Error(await responseError(r));
+    $("newPlayer").value=""; await loadData();
+  }catch(e){alert("Spieler konnte nicht gespeichert werden.");showDebug(e.message||String(e));}
+  finally{$("addBtn").disabled=false}
+}
+function vals(prefix){return [...document.querySelectorAll(`[id^="${prefix}"]`)].map(x=>x.value).filter(x=>x!=="").map(Number)}
+
+async function saveGame(){
+  const a=vals("a"),b=vals("b");
+  if(a.length!==mode.a||b.length!==mode.b)return alert("Bitte alle Spieler auswählen.");
+  if(new Set([...a,...b]).size!==a.length+b.length)return alert("Ein Spieler wurde mehrfach ausgewählt.");
+  const winner=+$("winner").value; $("saveBtn").disabled=true; $("saveStatus").textContent="Speichere …";
+  try{
+    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({team1_players:a,team2_players:b,winner})});
+    if(!r.ok) throw new Error(await responseError(r));
+    $("saveStatus").textContent="✅ Spiel online gespeichert"; $("saveStatus").className="status ok";
+    await loadData(); setTimeout(()=>$("saveStatus").textContent="",1800);
+  }catch(e){ $("saveStatus").textContent="❌ Speichern fehlgeschlagen"; $("saveStatus").className="status err"; showDebug(e.message||String(e)); }
+  finally{$("saveBtn").disabled=false}
 }
 
-function optionHTML() {
-  return '<option value="">Spieler auswählen</option>' +
-    players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-}
-
-function renderInputs() {
-  document.getElementById("team1").innerHTML =
-    Array.from({length:mode.a}, (_,i)=>`<select id="a${i}">${optionHTML()}</select>`).join('');
-  document.getElementById("team2").innerHTML =
-    Array.from({length:mode.b}, (_,i)=>`<select id="b${i}">${optionHTML()}</select>`).join('');
-}
-
-document.querySelectorAll('#modes button').forEach(b => {
-  b.onclick = () => {
-    document.querySelectorAll('#modes button').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    mode = {a:+b.dataset.a,b:+b.dataset.b};
-    renderInputs();
-  };
-});
-document.querySelector('#modes button').classList.add('active');
-
-async function addPlayer() {
-  const input = document.getElementById("newPlayer");
-  const name = input.value.trim();
-  if (!name) return;
-
-  if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-    alert("Dieser Spieler ist bereits vorhanden.");
-    return;
-  }
-
-  const btn = document.getElementById("addBtn");
-  btn.disabled = true;
-
-  try {
-    const r = await api("players", {
-      method: "POST",
-      headers: {"Prefer":"return=representation"},
-      body: JSON.stringify({name})
-    });
-
-    if (!r.ok) throw new Error(await responseError(r));
-
-    input.value = "";
+async function deleteGame(id){
+  if(!confirm("Dieses Spiel wirklich löschen? Es wird sofort aus der Statistik entfernt."))return;
+  try{
+    const r=await api(`games?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});
+    if(!r.ok) throw new Error(await responseError(r));
     await loadData();
-  } catch(e) {
-    console.error(e);
-    alert("Spieler konnte nicht gespeichert werden.");
-    showDebug(e.message || String(e));
-  } finally {
-    btn.disabled = false;
-  }
+  }catch(e){alert("Das Spiel konnte nicht gelöscht werden.");showDebug(e.message||String(e));}
 }
 
-function vals(prefix) {
-  return [...document.querySelectorAll(`[id^="${prefix}"]`)]
-    .map(x => x.value)
-    .filter(x => x !== "")
-    .map(Number);
-}
+function getPlayer(id){return players.find(p=>Number(p.id)===Number(id))}
+function names(ids){return (ids||[]).map(id=>{const p=getPlayer(id);return p?esc(p.name):"?"}).join(", ")}
 
-async function saveGame() {
-  const a = vals("a");
-  const b = vals("b");
-
-  if (a.length !== mode.a || b.length !== mode.b) {
-    alert("Bitte alle Spieler auswählen.");
-    return;
-  }
-
-  if (new Set([...a,...b]).size !== a.length+b.length) {
-    alert("Ein Spieler wurde mehrfach ausgewählt.");
-    return;
-  }
-
-  const winner = Number(document.getElementById("winner").value);
-  const btn = document.getElementById("saveBtn");
-  const status = document.getElementById("saveStatus");
-
-  btn.disabled = true;
-  status.textContent = "Speichere …";
-  status.className = "status";
-
-  try {
-    const r = await api("games", {
-      method: "POST",
-      headers: {"Prefer":"return=minimal"},
-      body: JSON.stringify({
-        team1_players: a,
-        team2_players: b,
-        winner
-      })
-    });
-
-    if (!r.ok) throw new Error(await responseError(r));
-
-    status.textContent = "✅ Spiel online gespeichert";
-    status.className = "status ok";
-    await loadData();
-    renderInputs();
-    setTimeout(()=>status.textContent="", 2000);
-  } catch(e) {
-    console.error(e);
-    status.textContent = "❌ Speichern fehlgeschlagen";
-    status.className = "status err";
-    showDebug(e.message || String(e));
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function calc() {
-  const m = {};
-  players.forEach(p => m[p.id] = {n:p.name,g:0,w:0,l:0});
-
-  games.forEach(g => {
-    (g.team1_players || []).forEach(id => {
-      if (!m[id]) return;
-      m[id].g++;
-      g.winner === 1 ? m[id].w++ : m[id].l++;
-    });
-    (g.team2_players || []).forEach(id => {
-      if (!m[id]) return;
-      m[id].g++;
-      g.winner === 2 ? m[id].w++ : m[id].l++;
-    });
+function calcPlayerStats(){
+  const m={};players.forEach(p=>m[p.id]={n:p.name,g:0,w:0,l:0});
+  games.forEach(g=>{
+    (g.team1_players||[]).forEach(id=>{if(m[id]){m[id].g++;g.winner===1?m[id].w++:m[id].l++}});
+    (g.team2_players||[]).forEach(id=>{if(m[id]){m[id].g++;g.winner===2?m[id].w++:m[id].l++}});
   });
-
-  return Object.values(m).sort((a,b) =>
-    (b.g ? b.w/b.g : 0) - (a.g ? a.w/a.g : 0) ||
-    b.w - a.w ||
-    a.n.localeCompare(b.n, "de")
-  );
+  return Object.values(m).sort((a,b)=>(b.g?b.w/b.g:0)-(a.g?a.w/a.g:0)||b.w-a.w||a.n.localeCompare(b.n,"de"));
 }
 
-function nameList(ids) {
-  return (ids || []).map(id => {
-    const p = getPlayerById(id);
-    return p ? esc(p.name) : "?";
-  }).join(", ");
+function calcSizeStats(){
+  const s={2:{g:0,w:0},3:{g:0,w:0},4:{g:0,w:0},5:{g:0,w:0}};
+  games.forEach(g=>{
+    const a=(g.team1_players||[]).length,b=(g.team2_players||[]).length;
+    if(s[a]){s[a].g++;if(g.winner===1)s[a].w++;}
+    if(s[b]){s[b].g++;if(g.winner===2)s[b].w++;}
+  });
+  return s;
 }
 
-function render() {
-  document.getElementById("stats").innerHTML = calc().map((x,i) => `
-  <tr>
-    <td>${i+1}</td><td>${esc(x.n)}</td><td>${x.g}</td>
-    <td>${x.w}</td><td>${x.l}</td>
-    <td><b>${x.g ? (100*x.w/x.g).toFixed(1) : "0.0"} %</b></td>
-  </tr>`).join("");
-
-  document.getElementById("players").textContent =
-    players.length ? players.map(p=>p.name).join(" · ") : "Noch keine Spieler.";
-
-  document.getElementById("history").innerHTML =
-    games.length ? games.map(g => `
-      <div class="game">
-        <b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>
-        ${nameList(g.team1_players)} <b>gegen</b> ${nameList(g.team2_players)}<br>
-        🏆 Team ${g.winner}
-      </div>`).join("") : '<p class="small">Noch keine Spiele.</p>';
+function renderMixerPlayers(){
+  const old=new Set([...document.querySelectorAll(".mix-player:checked")].map(x=>String(x.value)));
+  $("mixerPlayers").innerHTML=players.length?players.map(p=>`
+    <div class="pick"><input class="mix-player" type="checkbox" id="mix-${p.id}" value="${p.id}" ${old.has(String(p.id))?"checked":""}>
+    <label for="mix-${p.id}">${esc(p.name)}</label></div>`).join(""):'<p class="small">Lege zuerst Spieler an.</p>';
 }
 
-renderInputs();
-render();
-loadData();
+function mixTeams(){
+  const ids=[...document.querySelectorAll(".mix-player:checked")].map(x=>Number(x.value));
+  const n=+$("teamCount").value;
+  $("mixedTeams").innerHTML="";
+  if(ids.length<2){$("mixMessage").textContent="Bitte mindestens 2 Spieler auswählen.";return;}
+  if(n<2||n>ids.length){$("mixMessage").textContent="Es dürfen nicht mehr Teams als Spieler gewählt werden.";return;}
+  for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]]}
+  const teams=Array.from({length:n},()=>[]);
+  ids.forEach((id,i)=>teams[i%n].push(id));
+  $("mixMessage").textContent=`${ids.length} Spieler wurden auf ${n} Teams verteilt.`;
+  $("mixedTeams").innerHTML=teams.map((t,i)=>`<div class="mixed-team"><h3>Team ${i+1}</h3><ul>${t.map(id=>`<li>${esc(getPlayer(id)?.name||"?")}</li>`).join("")}</ul></div>`).join("");
+}
+
+function selectAllMixer(){
+  const boxes=[...document.querySelectorAll(".mix-player")];
+  const all=boxes.length&&boxes.every(b=>b.checked);
+  boxes.forEach(b=>b.checked=!all);
+  $("selectAllBtn").textContent=all?"Alle auswählen":"Auswahl aufheben";
+}
+
+function renderAll(){
+  const ps=calcPlayerStats();
+  $("stats").innerHTML=ps.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.n)}</td><td>${x.g}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.g?(100*x.w/x.g).toFixed(1):"0.0"} %</b></td></tr>`).join("");
+  $("players").textContent=players.length?players.map(p=>p.name).join(" · "):"Noch keine Spieler.";
+  const ss=calcSizeStats();
+  $("sizeStats").innerHTML=[2,3,4,5].map(n=>{const x=ss[n],q=x.g?(100*x.w/x.g).toFixed(1):"0.0";return `<div class="stat-card"><span>${n}er-Team</span><strong>${q} %</strong><span class="small">${x.w} Siege · ${x.g} Spiele</span></div>`}).join("");
+  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br>🏆 Team ${g.winner}</div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
+  document.querySelectorAll(".delete-game").forEach(b=>b.addEventListener("click",()=>deleteGame(b.dataset.id)));
+  renderInputs(); renderMixerPlayers();
+}
+
+$("addBtn").addEventListener("click",addPlayer);
+$("saveBtn").addEventListener("click",saveGame);
+$("reloadBtn").addEventListener("click",loadData);
+$("printBtn").addEventListener("click",()=>window.print());
+$("mixBtn").addEventListener("click",mixTeams);
+$("selectAllBtn").addEventListener("click",selectAllMixer);
+
+renderInputs();renderAll();loadData();
 </script>
 </body>
 </html>
