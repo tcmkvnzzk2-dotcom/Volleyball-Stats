@@ -27,6 +27,8 @@ button:disabled{opacity:.55}
 .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .team{background:#f8fafb;border:1px solid #dde3e8;border-radius:12px;padding:10px}
 .team select{margin-bottom:7px}
+.score-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end;margin-top:14px}
+.score-box label{display:block;font-weight:700;margin-bottom:5px}.score-sep{font-size:28px;font-weight:800;padding-bottom:9px}.score-box input{text-align:center;font-size:22px;font-weight:800}
 .scroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:560px}
 th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}
@@ -80,8 +82,13 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div class="team"><h3>Team 1</h3><div id="team1"></div></div>
 <div class="team"><h3>Team 2</h3><div id="team2"></div></div>
 </div>
-<h3>Sieger</h3>
-<select id="winner"><option value="1">🏆 Team 1</option><option value="2">🏆 Team 2</option></select>
+<h3>Ergebnis</h3>
+<p class="small">Das genaue Ergebnis ist Pflicht. Der Sieger wird automatisch aus dem Ergebnis ermittelt.</p>
+<div class="score-row">
+<div class="score-box"><label for="team1Score">Team 1</label><input id="team1Score" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
+<div class="score-sep">:</div>
+<div class="score-box"><label for="team2Score">Team 2</label><input id="team2Score" type="number" min="0" step="1" inputmode="numeric" placeholder="21"></div>
+</div>
 <button id="saveBtn">Spiel speichern</button>
 <div id="saveStatus" class="status"></div>
 </section>
@@ -172,7 +179,7 @@ async function loadData(){
   try{
     const pr=await api("players?select=id,name&order=name.asc");
     if(!pr.ok) throw new Error("players: "+await responseError(pr));
-    const gr=await api("games?select=id,played_at,team1_players,team2_players,winner&order=played_at.desc");
+    const gr=await api("games?select=id,played_at,team1_players,team2_players,winner,team1_score,team2_score&order=played_at.desc");
     if(!gr.ok) throw new Error("games: "+await responseError(gr));
     players=await pr.json(); games=await gr.json();
     $("connection").textContent="✅ Online verbunden"; $("connection").className="small ok";
@@ -212,11 +219,18 @@ async function saveGame(){
   const a=vals("a"),b=vals("b");
   if(a.length!==mode.a||b.length!==mode.b)return alert("Bitte alle Spieler auswählen.");
   if(new Set([...a,...b]).size!==a.length+b.length)return alert("Ein Spieler wurde mehrfach ausgewählt.");
-  const winner=+$("winner").value; $("saveBtn").disabled=true; $("saveStatus").textContent="Speichere …";
+  const raw1=$("team1Score").value.trim(),raw2=$("team2Score").value.trim();
+  if(raw1===""||raw2==="")return alert("Bitte das genaue Ergebnis für beide Teams eintragen.");
+  const team1_score=Number(raw1),team2_score=Number(raw2);
+  if(!Number.isInteger(team1_score)||!Number.isInteger(team2_score)||team1_score<0||team2_score<0)return alert("Bitte nur ganze, nicht negative Punkte eintragen.");
+  if(team1_score===team2_score)return alert("Ein Volleyballspiel kann nicht unentschieden gespeichert werden.");
+  const winner=team1_score>team2_score?1:2;
+  $("saveBtn").disabled=true; $("saveStatus").textContent="Speichere …";
   try{
-    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({team1_players:a,team2_players:b,winner})});
+    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({team1_players:a,team2_players:b,winner,team1_score,team2_score})});
     if(!r.ok) throw new Error(await responseError(r));
-    $("saveStatus").textContent="✅ Spiel online gespeichert"; $("saveStatus").className="status ok";
+    $("team1Score").value=""; $("team2Score").value="";
+    $("saveStatus").textContent=`✅ Spiel ${team1_score} : ${team2_score} online gespeichert`; $("saveStatus").className="status ok";
     await loadData(); setTimeout(()=>$("saveStatus").textContent="",1800);
   }catch(e){ $("saveStatus").textContent="❌ Speichern fehlgeschlagen"; $("saveStatus").className="status err"; showDebug(e.message||String(e)); }
   finally{$("saveBtn").disabled=false}
@@ -381,7 +395,7 @@ function renderAll(){
   $("players").textContent=players.length?players.map(p=>p.name).join(" · "):"Noch keine Spieler.";
   const ss=calcSizeStats();
   $("sizeStats").innerHTML=[2,3,4,5].map(n=>{const x=ss[n],q=x.g?(100*x.w/x.g).toFixed(1):"0.0";return `<div class="stat-card"><span>${n}er-Team</span><strong>${q} %</strong><span class="small">${x.w} Siege · ${x.g} Spiele</span></div>`}).join("");
-  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br>🏆 Team ${g.winner}</div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
+  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}</div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
   document.querySelectorAll(".delete-game").forEach(b=>b.addEventListener("click",()=>deleteGame(b.dataset.id)));
   renderInputs(); renderMixerPlayers();
 }
