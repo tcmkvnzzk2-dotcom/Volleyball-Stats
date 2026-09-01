@@ -73,6 +73,23 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .player-size-row .pct{font-weight:700}
 .player-size-row .record{font-size:.85rem;opacity:.72;white-space:nowrap}
 @media(min-width:620px){.relation-controls,.chart-controls{grid-template-columns:240px 1fr}.session-bar{grid-template-columns:1fr auto;align-items:center}.session-actions{grid-template-columns:auto auto}}
+
+.quick-title{margin-bottom:10px}
+.bestof-compact{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
+.bestof-label{font-size:.85rem;opacity:.72;white-space:nowrap}
+.bestof-buttons{display:flex;gap:5px;flex-wrap:wrap}
+.bestof-buttons .bestof-btn{width:34px;height:34px;min-height:34px;padding:0;margin:0;border-radius:9px;font-size:.9rem;line-height:1}
+.bestof-buttons .bestof-btn[data-selected="1"]{font-weight:700}
+.series-score{font-size:.85rem;font-weight:600;opacity:.78;white-space:nowrap}
+.quick-next-match{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px;padding:9px 11px;border:1px solid #dde3e8;border-radius:10px;background:#fff}
+.quick-next-label{font-size:.78rem;opacity:.66;text-transform:uppercase;letter-spacing:.03em}
+.quick-next-match strong{font-size:1rem}
+.quick-next-match .small{width:100%;font-size:.78rem;margin-top:-2px}
+.quick-grid{gap:7px}
+.quick-grid .score-box label{font-size:.86rem}
+.quick-grid .score-box input{min-height:54px;font-size:1.35rem;padding:8px 10px}
+.quick-actions{margin-top:8px}
+.quick-actions button{padding:11px 12px}
 @media(max-width:650px){
   .teams{grid-template-columns:1fr}
   .modes{grid-template-columns:repeat(2,1fr)}
@@ -188,22 +205,23 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div id="mixMessage" class="status"></div>
 <div id="mixedTeams" class="mixed-grid"></div>
 <div id="quickMatch" class="quick-match" style="display:none">
-  <h3>⚡ Ergebnis aus gemischten Teams eintragen</h3>
-  <p class="small">Die nächste Paarung wird automatisch gewählt. Bei 3 Teams spielt ihr 1–2, danach 1–3 und danach 2–3. Bei 4 Teams spielt ihr 1–2, 3–4, danach die beiden Verlierer und anschließend die beiden Sieger. Gespielt wird bis 15, ab 14:14 mit 2 Punkten Vorsprung.</p>
-  <div id="bestOfControl" class="small" style="display:none;margin:0 0 10px;line-height:2.2">
-    Gewinnsätze:
-    <button type="button" class="light bestof-btn" data-wins="2" style="width:auto;padding:5px 9px;margin:0 3px">2</button>
-    <button type="button" class="light bestof-btn" data-wins="3" style="width:auto;padding:5px 9px;margin:0 3px">3</button>
-    <button type="button" class="light bestof-btn" data-wins="4" style="width:auto;padding:5px 9px;margin:0 3px">4</button>
-    <button type="button" class="light bestof-btn" data-wins="5" style="width:auto;padding:5px 9px;margin:0 3px">5</button>
-    <button type="button" class="light bestof-btn" data-wins="6" style="width:auto;padding:5px 9px;margin:0 3px">6</button>
-    <button type="button" class="light bestof-btn" data-wins="7" style="width:auto;padding:5px 9px;margin:0 3px">7</button>
-    <span id="seriesScore" style="margin-left:6px"></span>
+  <h3 class="quick-title">⚡ Ergebnis eintragen</h3>
+  <div id="bestOfControl" class="bestof-compact" style="display:none">
+    <span class="bestof-label">Gewinnsätze</span>
+    <div class="bestof-buttons" aria-label="Benötigte Gewinnsätze">
+      <button type="button" class="light bestof-btn" data-wins="2">2</button>
+      <button type="button" class="light bestof-btn" data-wins="3">3</button>
+      <button type="button" class="light bestof-btn" data-wins="4">4</button>
+      <button type="button" class="light bestof-btn" data-wins="5">5</button>
+      <button type="button" class="light bestof-btn" data-wins="6">6</button>
+      <button type="button" class="light bestof-btn" data-wins="7">7</button>
+    </div>
+    <span id="seriesScore" class="series-score"></span>
   </div>
-  <div id="quickNextMatch" class="insight-card" style="margin-bottom:10px">
-    <h3 style="margin:0 0 4px">Nächstes Spiel</h3>
+  <div id="quickNextMatch" class="quick-next-match">
+    <span class="quick-next-label">Nächstes Spiel</span>
     <strong id="quickPairLabel">–</strong>
-    <div id="quickPairInfo" class="small"></div>
+    <span id="quickPairInfo" class="small"></span>
   </div>
   <div class="quick-grid">
     <div class="score-box"><label for="quickScoreA">Punkte Team 1</label><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
@@ -780,9 +798,12 @@ function renderQuickMatch(){
   if(lastMixedTeams.length===2){
     const w0=quickRoundResults.filter(r=>r.winnerIndex===0).length;
     const w1=quickRoundResults.filter(r=>r.winnerIndex===1).length;
-    $("seriesScore").textContent=`Stand: Team 1 ${w0}:${w1} Team 2`;
+    $("seriesScore").textContent=`Stand ${w0}:${w1}`;
     document.querySelectorAll(".bestof-btn").forEach(b=>{
-      b.textContent=(Number(b.dataset.wins)===seriesWinsNeeded?"✓ ":"")+b.dataset.wins;
+      const active=Number(b.dataset.wins)===seriesWinsNeeded;
+      b.dataset.selected=active?"1":"0";
+      b.textContent=b.dataset.wins;
+      b.setAttribute("aria-pressed",active?"true":"false");
     });
   }
   const pair=getQuickNextPair();
@@ -810,7 +831,7 @@ function renderQuickMatch(){
   $("quickSaveBtn").disabled=false;
   $("quickSaveBtn").textContent="💾 Gemischtes Spiel speichern";
   $("quickPairLabel").textContent=`Team ${pair.a+1} gegen Team ${pair.b+1}`;
-  $("quickPairInfo").textContent=`${pair.stage} · ${teamLabelByIndex(pair.a)} gegen ${teamLabelByIndex(pair.b)}`;
+  $("quickPairInfo").textContent=pair.stage;
   $("quickScoreA").value="";
   $("quickScoreB").value="";
   $("quickScoreA").placeholder="15";
