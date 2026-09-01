@@ -90,6 +90,19 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .quick-grid .score-box input{min-height:54px;font-size:1.35rem;padding:8px 10px}
 .quick-actions{margin-top:8px}
 .quick-actions button{padding:11px 12px}
+
+.history-scroll{
+  max-height:430px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding-right:3px;
+  scrollbar-gutter:stable;
+}
+.history-scroll .game:last-child{margin-bottom:0}
+.history-scroll::-webkit-scrollbar{width:6px}
+.history-scroll::-webkit-scrollbar-thumb{background:rgba(100,110,120,.28);border-radius:999px}
+.history-scroll::-webkit-scrollbar-track{background:transparent}
 @media(max-width:650px){
   .teams{grid-template-columns:1fr}
   .modes{grid-template-columns:repeat(2,1fr)}
@@ -244,7 +257,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 
 <section class="card history">
 <h2>📜 Spielhistorie</h2>
-<div id="history"></div>
+<div id="history" class="history-scroll"></div>
 </section>
 
 <section class="card tools">
