@@ -30,7 +30,7 @@ button:disabled{opacity:.55}
 .score-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end;margin-top:14px}
 .score-box label{display:block;font-weight:700;margin-bottom:5px}.score-sep{font-size:28px;font-weight:800;padding-bottom:9px}.score-box input{text-align:center;font-size:22px;font-weight:800}
 .scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:560px}
+table{width:100%;border-collapse:collapse;min-width:800px}
 th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}
 th:nth-child(2),td:nth-child(2){text-align:left}
 .game{border:1px solid #e0e5e9;border-radius:12px;padding:12px;margin:8px 0}
@@ -84,7 +84,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div class="team"><h3>Team 2</h3><div id="team2"></div></div>
 </div>
 <h3>Ergebnis</h3>
-<p class="small">Das genaue Ergebnis ist Pflicht. Der Sieger wird automatisch aus dem Ergebnis ermittelt.</p>
+<p class="small">Das genaue Ergebnis ist Pflicht. Gespielt wird bis 15, ab 14:14 mit 2 Punkten Vorsprung. Der Sieger wird automatisch erkannt.</p>
 <div class="score-row">
 <div class="score-box"><label for="team1Score">Team 1</label><input id="team1Score" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
 <div class="score-sep">:</div>
@@ -98,7 +98,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <h2>📊 Rangliste</h2>
 <div class="scroll">
 <table>
-<thead><tr><th>Platz</th><th>Spieler</th><th>Skill</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th></tr></thead>
+<thead><tr><th>Platz</th><th>Spieler</th><th>Skill</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th><th>Ø Punkte</th><th>Ø Gegenp.</th><th>Ø Diff.</th></tr></thead>
 <tbody id="stats"></tbody>
 </table>
 </div>
@@ -106,13 +106,13 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 
 <section class="card">
 <h2>📈 Siegquote nach Teamgröße</h2>
-<p class="small">Jede Mannschaft wird nach ihrer eigenen Größe gewertet. Bei einem 3:4-Spiel zählt das Ergebnis also einmal für die 3er- und einmal für die 4er-Team-Statistik.</p>
+<p class="small">Hier stehen die Quoten nach Teamgröße gesammelt. Oben siehst du die Gesamtquote aller Spiele, darunter die persönliche Siegquote jedes Spielers im 2er-, 3er-, 4er- und 5er-Team. Bei einem 3:4-Spiel wird jede Mannschaft nach ihrer eigenen Größe gewertet.</p>
 <div id="sizeStats" class="stat-cards"></div>
 </section>
 
 <section class="card mixer">
 <h2>🎲 Teams mischen</h2>
-<p class="small">Wähle hier <b>nur die Spieler aus, die heute tatsächlich da sind</b>. Danach werden ausschließlich diese Spieler gemischt. Im Modus <b>Ausgeglichen</b> nutzt die App das Skillrating aus euren gespeicherten Ergebnissen.</p>
+<p class="small">Wähle hier <b>nur die Spieler aus, die heute tatsächlich da sind</b>. Danach werden ausschließlich diese Spieler gemischt. Im Modus <b>Ausgeglichen</b> nutzt die App das Skillrating aus euren gespeicherten Ergebnissen. Bereits heute gemeinsam gespielte Paarungen werden möglichst vermieden.</p>
 <div id="mixerPlayers" class="player-picks"></div>
 <div class="mixer-controls">
 <button type="button" class="light" id="selectAllBtn">Alle auswählen</button>
@@ -133,7 +133,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div id="mixedTeams" class="mixed-grid"></div>
 <div id="quickMatch" class="quick-match" style="display:none">
   <h3>⚡ Ergebnis aus gemischten Teams eintragen</h3>
-  <p class="small">Wähle zwei der gemischten Teams aus. Die Spieler werden automatisch übernommen.</p>
+  <p class="small">Wähle zwei der gemischten Teams aus. Die Spieler werden automatisch übernommen. Gespielt wird bis 15, ab 14:14 mit 2 Punkten Vorsprung.</p>
   <div class="mixer-controls">
     <select id="quickTeamA" aria-label="Erstes Team"></select>
     <select id="quickTeamB" aria-label="Zweites Team"></select>
@@ -233,6 +233,38 @@ async function addPlayer(){
 }
 function vals(prefix){return [...document.querySelectorAll(`[id^="${prefix}"]`)].map(x=>x.value).filter(x=>x!=="").map(Number)}
 
+
+function validateVolleyballScore(a,b){
+  if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0)
+    return "Bitte nur ganze, nicht negative Punkte eintragen.";
+  if(a===b) return "Ein Volleyballspiel kann nicht unentschieden gespeichert werden.";
+
+  const winner=Math.max(a,b), loser=Math.min(a,b);
+  if(winner<15) return "Der Sieger muss mindestens 15 Punkte haben.";
+
+  // Bis 13 Gegenpunkte endet der Satz exakt bei 15.
+  if(loser<=13 && winner!==15)
+    return "Bis einschließlich 13 Gegenpunkte endet das Spiel bei 15 Punkten.";
+
+  // Ab 14:14 wird so lange gespielt, bis ein Team 2 Punkte Vorsprung hat.
+  if(loser>=14 && winner-loser!==2)
+    return "Ab 14:14 muss mit genau 2 Punkten Vorsprung gewonnen werden.";
+
+  return "";
+}
+
+function scoreMarginMultiplier(g){
+  const a=Number(g.team1_score), b=Number(g.team2_score);
+  if(!Number.isFinite(a)||!Number.isFinite(b)||a===b) return 1;
+
+  // Knappes 15:13 / 16:14 zählt deutlich weniger als ein klarer Sieg.
+  // 15:0 liegt bei 1,50x; ein Sieg mit nur 2 Punkten Abstand ungefähr bei 0,63x.
+  const winner=Math.max(a,b);
+  const margin=Math.abs(a-b);
+  const dominance=Math.min(1, margin/Math.max(15,winner));
+  return 0.50 + dominance;
+}
+
 async function saveGame(){
   const a=vals("a"),b=vals("b");
   if(a.length!==mode.a||b.length!==mode.b)return alert("Bitte alle Spieler auswählen.");
@@ -240,8 +272,8 @@ async function saveGame(){
   const raw1=$("team1Score").value.trim(),raw2=$("team2Score").value.trim();
   if(raw1===""||raw2==="")return alert("Bitte das genaue Ergebnis für beide Teams eintragen.");
   const team1_score=Number(raw1),team2_score=Number(raw2);
-  if(!Number.isInteger(team1_score)||!Number.isInteger(team2_score)||team1_score<0||team2_score<0)return alert("Bitte nur ganze, nicht negative Punkte eintragen.");
-  if(team1_score===team2_score)return alert("Ein Volleyballspiel kann nicht unentschieden gespeichert werden.");
+  const scoreError=validateVolleyballScore(team1_score,team2_score);
+  if(scoreError)return alert(scoreError);
   const winner=team1_score>team2_score?1:2;
   $("saveBtn").disabled=true; $("saveStatus").textContent="Speichere …";
   try{
@@ -283,9 +315,11 @@ function calcSkillRatings(){
     const ea=1/(1+Math.pow(10,(rb-ra)/400));
     const actualA=g.winner===1?1:0;
 
-    // Etwas höhere Lernrate am Anfang, damit neue Spieler schneller einsortiert werden.
+    // Das exakte Ergebnis beeinflusst die Stärke der Rating-Änderung:
+    // klare Siege zählen mehr, sehr knappe Spiele weniger.
     const K=32;
-    const delta=K*(actualA-ea);
+    const marginFactor=scoreMarginMultiplier(g);
+    const delta=K*(actualA-ea)*marginFactor;
     a.forEach(id=>rating[id]+=delta);
     b.forEach(id=>rating[id]-=delta);
   });
@@ -302,12 +336,39 @@ function skillLabel(r){
 
 function calcPlayerStats(){
   const ratings=calcSkillRatings();
-  const m={};players.forEach(p=>m[p.id]={id:p.id,n:p.name,g:0,w:0,l:0,r:ratings[p.id]||1000});
-  games.forEach(g=>{
-    (g.team1_players||[]).forEach(id=>{if(m[id]){m[id].g++;g.winner===1?m[id].w++:m[id].l++}});
-    (g.team2_players||[]).forEach(id=>{if(m[id]){m[id].g++;g.winner===2?m[id].w++:m[id].l++}});
+  const m={};
+  players.forEach(p=>m[p.id]={
+    id:p.id,n:p.name,g:0,w:0,l:0,r:ratings[p.id]||1000,
+    pf:0,pa:0,
+    sizes:{2:{g:0,w:0},3:{g:0,w:0},4:{g:0,w:0},5:{g:0,w:0}}
   });
+
+  games.forEach(g=>{
+    const s1=Number(g.team1_score)||0, s2=Number(g.team2_score)||0;
+    const a=g.team1_players||[], b=g.team2_players||[];
+
+    a.forEach(id=>{
+      if(!m[id])return;
+      const x=m[id]; x.g++; x.pf+=s1; x.pa+=s2;
+      g.winner===1?x.w++:x.l++;
+      const n=a.length;
+      if(x.sizes[n]){x.sizes[n].g++;if(g.winner===1)x.sizes[n].w++;}
+    });
+    b.forEach(id=>{
+      if(!m[id])return;
+      const x=m[id]; x.g++; x.pf+=s2; x.pa+=s1;
+      g.winner===2?x.w++:x.l++;
+      const n=b.length;
+      if(x.sizes[n]){x.sizes[n].g++;if(g.winner===2)x.sizes[n].w++;}
+    });
+  });
+
   return Object.values(m).sort((a,b)=>b.r-a.r||(b.g?b.w/b.g:0)-(a.g?a.w/a.g:0)||a.n.localeCompare(b.n,"de"));
+}
+
+function sizeQuoteCell(x,n){
+  const z=x.sizes[n];
+  return z.g?`${(100*z.w/z.g).toFixed(1)} %<br><span class="small">${z.w}/${z.g}</span>`:'–';
 }
 
 function calcSizeStats(){
@@ -357,6 +418,47 @@ function randomPartition(ids,n){
   return teams;
 }
 
+
+function localDayKey(d){
+  const x=new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+}
+
+function todayTeammateCounts(){
+  const today=localDayKey(new Date());
+  const counts=new Map();
+
+  const addTeam=team=>{
+    const ids=(team||[]).map(Number);
+    for(let i=0;i<ids.length;i++){
+      for(let j=i+1;j<ids.length;j++){
+        const key=[ids[i],ids[j]].sort((a,b)=>a-b).join("-");
+        counts.set(key,(counts.get(key)||0)+1);
+      }
+    }
+  };
+
+  games.forEach(g=>{
+    if(localDayKey(g.played_at)!==today)return;
+    addTeam(g.team1_players);
+    addTeam(g.team2_players);
+  });
+  return counts;
+}
+
+function repetitionScore(teams,pairCounts){
+  let repeats=0;
+  teams.forEach(team=>{
+    for(let i=0;i<team.length;i++){
+      for(let j=i+1;j<team.length;j++){
+        const key=[Number(team[i]),Number(team[j])].sort((a,b)=>a-b).join("-");
+        repeats+=pairCounts.get(key)||0;
+      }
+    }
+  });
+  return repeats;
+}
+
 function balanceScore(teams,ratings){
   const strengths=teams.map(t=>teamStrength(t,ratings));
   const avg=strengths.reduce((a,b)=>a+b,0)/strengths.length;
@@ -391,8 +493,8 @@ async function saveMixedGame(){
   const raw1=$("quickScoreA").value.trim(), raw2=$("quickScoreB").value.trim();
   if(raw1===""||raw2==="")return alert("Bitte das genaue Ergebnis für beide Teams eintragen.");
   const team1_score=Number(raw1), team2_score=Number(raw2);
-  if(!Number.isInteger(team1_score)||!Number.isInteger(team2_score)||team1_score<0||team2_score<0)return alert("Bitte nur ganze, nicht negative Punkte eintragen.");
-  if(team1_score===team2_score)return alert("Ein Volleyballspiel kann nicht unentschieden gespeichert werden.");
+  const scoreError=validateVolleyballScore(team1_score,team2_score);
+  if(scoreError)return alert(scoreError);
   const winner=team1_score>team2_score?1:2;
 
   $("quickSaveBtn").disabled=true;
@@ -431,22 +533,26 @@ function mixTeams(){
   const ratings=calcSkillRatings();
   let teams;
 
+  const pairCounts=todayTeammateCounts();
+
   if(modeName==="random"){
     teams=randomPartition(ids,n);
   }else{
-    // Viele mögliche Aufteilungen testen und die fairsten Kandidaten sammeln.
-    // Dadurch bleibt die Bedienung auf dem iPhone schnell.
+    // Viele mögliche Aufteilungen testen. Wiederholte Mitspieler-Paarungen von heute
+    // bekommen einen weichen Malus; Skill-Ausgeglichenheit bleibt ebenfalls wichtig.
     const tries=Math.min(12000,Math.max(2500,ids.length*700));
     const candidates=[];
     for(let i=0;i<tries;i++){
       const t=randomPartition(ids,n);
-      const score=balanceScore(t,ratings);
-      candidates.push({t,score});
+      const balance=balanceScore(t,ratings);
+      const repeats=repetitionScore(t,pairCounts);
+      const score=balance + repeats*1400;
+      candidates.push({t,score,balance,repeats});
     }
-    candidates.sort((a,b)=>a.score-b.score);
+    candidates.sort((a,b)=>a.score-b.score||a.repeats-b.repeats||a.balance-b.balance);
 
     if(modeName==="balancedRandom"){
-      // Zufällige Wahl aus den besten ~2 %, damit nicht immer dieselben Teams entstehen.
+      // Zufällige Wahl aus den besten ~2 %, damit zusätzlich etwas Variation bleibt.
       const pool=Math.max(5,Math.floor(candidates.length*0.02));
       teams=candidates[Math.floor(Math.random()*pool)].t;
     }else{
@@ -456,8 +562,9 @@ function mixTeams(){
 
   const strengths=teams.map(t=>teamStrength(t,ratings));
   const spread=Math.max(...strengths)-Math.min(...strengths);
+  const repeats=repetitionScore(teams,todayTeammateCounts());
   $("mixMessage").textContent=
-    `${ids.length} Spieler · ${n} Teams · Stärke-Abstand ${spread.toFixed(0)} Punkte`;
+    `${ids.length} Spieler · ${n} Teams · Stärke-Abstand ${spread.toFixed(0)} · heutige Wiederholungen ${repeats}`;
 
   $("mixedTeams").innerHTML=teams.map((t,i)=>{
     const strength=teamStrength(t,ratings);
@@ -486,10 +593,38 @@ function selectAllMixer(){
 
 function renderAll(){
   const ps=calcPlayerStats();
-  $("stats").innerHTML=ps.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.n)}</td><td><b>${skillLabel(x.r)} · ${x.r.toFixed(0)}</b></td><td>${x.g}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.g?(100*x.w/x.g).toFixed(1):"0.0"} %</b></td></tr>`).join("");
+  $("stats").innerHTML=ps.map((x,i)=>{
+    const avgFor=x.g?x.pf/x.g:0, avgAgainst=x.g?x.pa/x.g:0, avgDiff=x.g?(x.pf-x.pa)/x.g:0;
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${esc(x.n)}</td>
+      <td><b>${skillLabel(x.r)} · ${x.r.toFixed(0)}</b></td>
+      <td>${x.g}</td><td>${x.w}</td><td>${x.l}</td>
+      <td><b>${x.g?(100*x.w/x.g).toFixed(1):"0.0"} %</b></td>
+      <td>${avgFor.toFixed(1)}</td>
+      <td>${avgAgainst.toFixed(1)}</td>
+      <td>${avgDiff>0?"+":""}${avgDiff.toFixed(1)}</td>
+    </tr>`;
+  }).join("");
   $("players").textContent=players.length?players.map(p=>p.name).join(" · "):"Noch keine Spieler.";
   const ss=calcSizeStats();
-  $("sizeStats").innerHTML=[2,3,4,5].map(n=>{const x=ss[n],q=x.g?(100*x.w/x.g).toFixed(1):"0.0";return `<div class="stat-card"><span>${n}er-Team</span><strong>${q} %</strong><span class="small">${x.w} Siege · ${x.g} Spiele</span></div>`}).join("");
+  const overallSizeCards=[2,3,4,5].map(n=>{
+    const x=ss[n],q=x.g?(100*x.w/x.g).toFixed(1):"0.0";
+    return `<div class="stat-card"><span>${n}er-Team gesamt</span><strong>${q} %</strong><span class="small">${x.w} Siege · ${x.g} Spiele</span></div>`;
+  }).join("");
+
+  const playerSizeGroups=[2,3,4,5].map(n=>{
+    const rows=ps
+      .filter(x=>x.sizes[n].g>0)
+      .sort((a,b)=>(b.sizes[n].w/b.sizes[n].g)-(a.sizes[n].w/a.sizes[n].g)||b.sizes[n].g-a.sizes[n].g||a.n.localeCompare(b.n,"de"))
+      .map(x=>{
+        const z=x.sizes[n],q=(100*z.w/z.g).toFixed(1);
+        return `<div class="player-size-row"><span>${esc(x.n)}</span><span class="pct">${q} %</span><span class="record">${z.w}/${z.g}</span></div>`;
+      }).join("");
+    return `<div class="player-size-group"><h3>${n}er-Team · Spielerquoten</h3><div class="player-size-list">${rows||'<span class="small">Noch keine Spiele.</span>'}</div></div>`;
+  }).join("");
+
+  $("sizeStats").innerHTML=overallSizeCards+playerSizeGroups;
   $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}</div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
   document.querySelectorAll(".delete-game").forEach(b=>b.addEventListener("click",()=>deleteGame(b.dataset.id)));
   renderInputs(); renderMixerPlayers();
