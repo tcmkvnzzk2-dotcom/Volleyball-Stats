@@ -30,7 +30,7 @@ button:disabled{opacity:.55}
 .score-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end;margin-top:14px}
 .score-box label{display:block;font-weight:700;margin-bottom:5px}.score-sep{font-size:28px;font-weight:800;padding-bottom:9px}.score-box input{text-align:center;font-size:22px;font-weight:800}
 .scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:800px}
+table{width:100%;border-collapse:collapse;min-width:900px}
 th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}
 th:nth-child(2),td:nth-child(2){text-align:left}
 .game{border:1px solid #e0e5e9;border-radius:12px;padding:12px;margin:8px 0}
@@ -53,6 +53,26 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .stat-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .stat-card{border:1px solid #dde3e8;border-radius:12px;padding:11px;text-align:center;background:#fafbfc}
 .stat-card strong{display:block;font-size:22px;margin:4px 0}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.insight-card{border:1px solid #dde3e8;border-radius:12px;padding:12px;background:#fff}
+.insight-card h3{margin:0 0 6px;font-size:1rem}
+.insight-card strong{font-size:1.25rem}
+.form-dots{white-space:nowrap;letter-spacing:2px}
+.session-bar{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0;padding:12px;border:1px solid #dde3e8;border-radius:12px}
+.session-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.relation-controls,.chart-controls{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:10px}
+.skill-chart{width:100%;min-height:190px;border:1px solid #dde3e8;border-radius:12px;padding:8px;overflow:hidden}
+.skill-chart svg{width:100%;height:auto;display:block}
+.history-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.history-actions button{width:auto;margin:0;padding:7px 10px;font-size:.85rem}
+.player-size-group{margin-top:14px;padding-top:12px;border-top:1px solid #dde3e8}
+.player-size-group h3{margin:0 0 8px}
+.player-size-list{display:grid;gap:7px}
+.player-size-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #eef1f3}
+.player-size-row:last-child{border-bottom:0}
+.player-size-row .pct{font-weight:700}
+.player-size-row .record{font-size:.85rem;opacity:.72;white-space:nowrap}
+@media(min-width:620px){.relation-controls,.chart-controls{grid-template-columns:240px 1fr}.session-bar{grid-template-columns:1fr auto;align-items:center}.session-actions{grid-template-columns:auto auto}}
 @media(max-width:650px){
   .teams{grid-template-columns:1fr}
   .modes{grid-template-columns:repeat(2,1fr)}
@@ -98,7 +118,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <h2>📊 Rangliste</h2>
 <div class="scroll">
 <table>
-<thead><tr><th>Platz</th><th>Spieler</th><th>Skill</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th><th>Ø Punkte</th><th>Ø Gegenp.</th><th>Ø Diff.</th></tr></thead>
+<thead><tr><th>Platz</th><th>Spieler</th><th>Skill</th><th>Form (5)</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th><th>Ø Punkte</th><th>Ø Gegenp.</th><th>Ø Diff.</th></tr></thead>
 <tbody id="stats"></tbody>
 </table>
 </div>
@@ -110,9 +130,45 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div id="sizeStats" class="stat-cards"></div>
 </section>
 
+<section class="card">
+<h2>🏆 Heutiger Spieltag</h2>
+<p class="small">Automatische Auswertung aller heute gespeicherten Spiele.</p>
+<div id="todaySummary" class="dashboard-grid"></div>
+</section>
+
+<section class="card">
+<h2>🤝 Mitspieler & Gegner</h2>
+<div class="relation-controls">
+<select id="relationPlayer" aria-label="Spieler für Mitspieler- und Gegnerstatistik"></select>
+<div class="small">Beste Teamkollegen, Lieblingsgegner und Angstgegner.</div>
+</div>
+<div id="relations" class="dashboard-grid"></div>
+</section>
+
+<section class="card">
+<h2>📈 Skill-Verlauf</h2>
+<div class="chart-controls">
+<select id="chartPlayer" aria-label="Spieler für Skill-Verlauf"></select>
+<div class="small">Entwicklung des Skillratings nach jedem gespeicherten Spiel.</div>
+</div>
+<div id="skillChart" class="skill-chart"></div>
+</section>
+
+<section class="card">
+<h2>🏅 Rekorde</h2>
+<div id="records" class="dashboard-grid"></div>
+</section>
+
 <section class="card mixer">
 <h2>🎲 Teams mischen</h2>
-<p class="small">Wähle hier <b>nur die Spieler aus, die heute tatsächlich da sind</b>. Danach werden ausschließlich diese Spieler gemischt. Im Modus <b>Ausgeglichen</b> nutzt die App das Skillrating aus euren gespeicherten Ergebnissen. Bereits heute gemeinsam gespielte Paarungen werden möglichst vermieden.</p>
+<p class="small">Wähle hier <b>nur die Spieler aus, die heute tatsächlich da sind</b>. Der intelligente Mixer vermeidet möglichst Wiederholungen bei Mitspielern und Gegnern.</p>
+<div class="session-bar">
+  <div><b>🏐 Spieltag-Modus</b><div id="sessionStatus" class="small">Noch nicht gestartet.</div></div>
+  <div class="session-actions">
+    <button type="button" class="light" id="startSessionBtn">Spieltag starten</button>
+    <button type="button" class="light" id="endSessionBtn">Beenden</button>
+  </div>
+</div>
 <div id="mixerPlayers" class="player-picks"></div>
 <div class="mixer-controls">
 <button type="button" class="light" id="selectAllBtn">Alle auswählen</button>
@@ -176,7 +232,9 @@ const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
-let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[], selectedMixerIds=new Set();
+let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[];
+let selectedMixerIds=new Set(JSON.parse(localStorage.getItem("volleyAttendance")||"[]").map(String));
+let sessionActive=localStorage.getItem("volleySessionActive")==="1";
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -298,6 +356,36 @@ async function deleteGame(id){
 function getPlayer(id){return players.find(p=>Number(p.id)===Number(id))}
 function names(ids){return (ids||[]).map(id=>{const p=getPlayer(id);return p?esc(p.name):"?"}).join(", ")}
 
+function playerName(id){const p=getPlayer(id);return p?p.name:"?";}
+function pct(w,g){return g?`${(100*w/g).toFixed(1)} %`:"–";}
+function todayKey(){return localDayKey(new Date());}
+function todayGames(){const d=todayKey();return games.filter(g=>localDayKey(g.played_at)===d);}
+function saveAttendance(){localStorage.setItem("volleyAttendance",JSON.stringify([...selectedMixerIds]));}
+function renderSessionStatus(){
+  const el=$("sessionStatus");if(!el)return;
+  if(sessionActive){
+    const chosen=[...selectedMixerIds].map(Number).map(playerName).join(", ");
+    el.textContent=`Aktiv · ${selectedMixerIds.size} anwesend${chosen?": "+chosen:""}`;
+  }else el.textContent="Noch nicht gestartet.";
+}
+function startSession(){
+  if(selectedMixerIds.size<2)return alert("Bitte zuerst die anwesenden Spieler auswählen.");
+  sessionActive=true;localStorage.setItem("volleySessionActive","1");saveAttendance();renderSessionStatus();
+}
+function endSession(){sessionActive=false;localStorage.removeItem("volleySessionActive");renderSessionStatus();}
+function playerGameResult(g,id){
+  const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number),pid=Number(id);
+  if(a.includes(pid))return g.winner===1?"W":"L";
+  if(b.includes(pid))return g.winner===2?"W":"L";
+  return null;
+}
+function formHTML(id){
+  const arr=[...games].sort((a,b)=>new Date(b.played_at)-new Date(a.played_at))
+    .map(g=>playerGameResult(g,id)).filter(Boolean).slice(0,5);
+  return arr.length?arr.map(x=>x==="W"?"🟢":"🔴").join(""):"–";
+}
+
+
 
 function calcSkillRatings(){
   const rating={};
@@ -324,6 +412,35 @@ function calcSkillRatings(){
     b.forEach(id=>rating[id]-=delta);
   });
   return rating;
+}
+
+function calcRatingTimeline(){
+  const rating={};players.forEach(p=>rating[p.id]=1000);
+  const history={};players.forEach(p=>history[p.id]=[{date:null,rating:1000}]);
+  const changes=[];
+  const ordered=[...games].sort((a,b)=>new Date(a.played_at)-new Date(b.played_at));
+  ordered.forEach(g=>{
+    const a=(g.team1_players||[]).map(Number).filter(id=>rating[id]!=null);
+    const b=(g.team2_players||[]).map(Number).filter(id=>rating[id]!=null);
+    if(!a.length||!b.length)return;
+    const ra=a.reduce((z,id)=>z+rating[id],0)/a.length;
+    const rb=b.reduce((z,id)=>z+rating[id],0)/b.length;
+    const ea=1/(1+Math.pow(10,(rb-ra)/400));
+    const actualA=g.winner===1?1:0;
+    const delta=32*(actualA-ea)*scoreMarginMultiplier(g);
+    a.forEach(id=>{rating[id]+=delta;history[id].push({date:g.played_at,rating:rating[id]});});
+    b.forEach(id=>{rating[id]-=delta;history[id].push({date:g.played_at,rating:rating[id]});});
+    changes.push({game:g,a,b,delta});
+  });
+  return {rating,history,changes};
+}
+function dailySkillChanges(day=todayKey()){
+  const out={};players.forEach(p=>out[p.id]=0);
+  calcRatingTimeline().changes.forEach(c=>{
+    if(localDayKey(c.game.played_at)!==day)return;
+    c.a.forEach(id=>out[id]+=c.delta);c.b.forEach(id=>out[id]-=c.delta);
+  });
+  return out;
 }
 
 function skillLabel(r){
@@ -371,6 +488,102 @@ function sizeQuoteCell(x,n){
   return z.g?`${(100*z.w/z.g).toFixed(1)} %<br><span class="small">${z.w}/${z.g}</span>`:'–';
 }
 
+
+function calcRelations(playerId){
+  const pid=Number(playerId),mates={},opps={};
+  const add=(map,id,win,diff)=>{
+    if(Number(id)===pid)return;
+    if(!map[id])map[id]={id:Number(id),g:0,w:0,diff:0};
+    map[id].g++;if(win)map[id].w++;map[id].diff+=diff;
+  };
+  games.forEach(g=>{
+    const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number);
+    const inA=a.includes(pid),inB=b.includes(pid);if(!inA&&!inB)return;
+    const win=inA?g.winner===1:g.winner===2;
+    const diff=inA?Number(g.team1_score)-Number(g.team2_score):Number(g.team2_score)-Number(g.team1_score);
+    (inA?a:b).forEach(id=>add(mates,id,win,diff));
+    (inA?b:a).forEach(id=>add(opps,id,win,diff));
+  });
+  const ma=Object.values(mates),oa=Object.values(opps);
+  return {
+    bestMate:[...ma].sort((a,b)=>(b.w/b.g)-(a.w/a.g)||b.g-a.g)[0],
+    favOpp:[...oa].sort((a,b)=>(b.w/b.g)-(a.w/a.g)||b.g-a.g)[0],
+    nemesis:[...oa].sort((a,b)=>(a.w/a.g)-(b.w/b.g)||b.g-a.g)[0]
+  };
+}
+function relationCard(title,x){
+  if(!x)return `<div class="insight-card"><h3>${title}</h3><span class="small">Noch nicht genug Daten.</span></div>`;
+  return `<div class="insight-card"><h3>${title}</h3><strong>${esc(playerName(x.id))}</strong><div>${pct(x.w,x.g)} · ${x.w}/${x.g}</div><div class="small">Ø Punktediff. ${(x.diff/x.g>=0?"+":"")+(x.diff/x.g).toFixed(1)}</div></div>`;
+}
+function renderRelations(){
+  const sel=$("relationPlayer");if(!sel)return;
+  const old=sel.value;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  if(old&&players.some(p=>String(p.id)===old))sel.value=old;
+  const pid=Number(sel.value||players[0]?.id);
+  if(!pid){$("relations").innerHTML='<span class="small">Noch keine Spieler.</span>';return;}
+  const r=calcRelations(pid);
+  $("relations").innerHTML=relationCard("🤝 Bester Mitspieler",r.bestMate)+relationCard("🎯 Lieblingsgegner",r.favOpp)+relationCard("😈 Angstgegner",r.nemesis);
+}
+function renderTodaySummary(){
+  const gs=todayGames(),box=$("todaySummary");if(!box)return;
+  if(!gs.length){box.innerHTML='<div class="insight-card"><h3>Heute</h3><span class="small">Noch keine Spiele gespeichert.</span></div>';return;}
+  const st={};players.forEach(p=>st[p.id]={id:Number(p.id),g:0,w:0,diff:0});
+  gs.forEach(g=>{
+    const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number);
+    const d1=Number(g.team1_score)-Number(g.team2_score),d2=-d1;
+    a.forEach(id=>{if(st[id]){st[id].g++;st[id].diff+=d1;if(g.winner===1)st[id].w++;}});
+    b.forEach(id=>{if(st[id]){st[id].g++;st[id].diff+=d2;if(g.winner===2)st[id].w++;}});
+  });
+  const changes=dailySkillChanges(),active=Object.values(st).filter(x=>x.g);
+  const mvp=[...active].sort((a,b)=>((changes[b.id]||0)+(b.w/b.g)*15+(b.diff/b.g)*1.5)-((changes[a.id]||0)+(a.w/a.g)*15+(a.diff/a.g)*1.5))[0];
+  const gain=[...active].sort((a,b)=>(changes[b.id]||0)-(changes[a.id]||0))[0];
+  const close=[...gs].sort((a,b)=>Math.abs(Number(a.team1_score)-Number(a.team2_score))-Math.abs(Number(b.team1_score)-Number(b.team2_score)))[0];
+  const big=[...gs].sort((a,b)=>Math.abs(Number(b.team1_score)-Number(b.team2_score))-Math.abs(Number(a.team1_score)-Number(a.team2_score)))[0];
+  box.innerHTML=`
+  <div class="insight-card"><h3>🏐 Spiele heute</h3><strong>${gs.length}</strong><div class="small">${active.length} Spieler eingesetzt</div></div>
+  <div class="insight-card"><h3>👑 MVP des Abends</h3><strong>${esc(playerName(mvp.id))}</strong><div>${mvp.w}/${mvp.g} Siege · Ø Diff. ${(mvp.diff/mvp.g>=0?"+":"")+(mvp.diff/mvp.g).toFixed(1)}</div></div>
+  <div class="insight-card"><h3>📈 Größter Skillgewinn</h3><strong>${esc(playerName(gain.id))}</strong><div>${changes[gain.id]>=0?"+":""}${changes[gain.id].toFixed(1)} Skill</div></div>
+  <div class="insight-card"><h3>🤏 Knappstes Spiel</h3><strong>${close.team1_score}:${close.team2_score}</strong><div class="small">${names(close.team1_players)} gegen ${names(close.team2_players)}</div></div>
+  <div class="insight-card"><h3>💥 Deutlichster Sieg</h3><strong>${big.team1_score}:${big.team2_score}</strong><div class="small">${names(big.team1_players)} gegen ${names(big.team2_players)}</div></div>`;
+}
+function renderSkillChart(){
+  const sel=$("chartPlayer"),box=$("skillChart");if(!sel||!box)return;
+  const old=sel.value;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  if(old&&players.some(p=>String(p.id)===old))sel.value=old;
+  const pid=Number(sel.value||players[0]?.id);
+  if(!pid){box.innerHTML='<span class="small">Noch keine Spieler.</span>';return;}
+  const arr=calcRatingTimeline().history[pid]||[{rating:1000}];
+  const W=640,H=190,pad=26,vals=arr.map(x=>x.rating),min=Math.min(...vals,950)-10,max=Math.max(...vals,1050)+10;
+  const xx=i=>arr.length<=1?pad:pad+i*(W-2*pad)/(arr.length-1),yy=v=>H-pad-(v-min)*(H-2*pad)/(max-min||1);
+  const pts=arr.map((d,i)=>`${xx(i)},${yy(d.rating)}`).join(" ");
+  box.innerHTML=`<div><b>${esc(playerName(pid))}</b> · aktuell ${vals[vals.length-1].toFixed(0)} Skill</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Skill-Verlauf"><line x1="${pad}" y1="${yy(1000)}" x2="${W-pad}" y2="${yy(1000)}" stroke="currentColor" opacity=".18"/><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${arr.map((d,i)=>`<circle cx="${xx(i)}" cy="${yy(d.rating)}" r="4" fill="currentColor"><title>${d.rating.toFixed(0)} Skill</title></circle>`).join("")}</svg>`;
+}
+function calcStreaks(pid){
+  let cw=0,cl=0,bw=0,bl=0;
+  [...games].sort((a,b)=>new Date(a.played_at)-new Date(b.played_at)).forEach(g=>{
+    const r=playerGameResult(g,pid);if(!r)return;
+    if(r==="W"){cw++;cl=0;bw=Math.max(bw,cw);}else{cl++;cw=0;bl=Math.max(bl,cl);}
+  });return{bw,bl};
+}
+function renderRecords(){
+  const box=$("records");if(!box)return;
+  if(!games.length){box.innerHTML='<div class="insight-card"><span class="small">Noch keine Rekorde.</span></div>';return;}
+  const tl=calcRatingTimeline();let high={id:null,r:1000},winSt={id:null,n:0},lossSt={id:null,n:0};
+  players.forEach(p=>{
+    (tl.history[p.id]||[]).forEach(x=>{if(x.rating>high.r)high={id:Number(p.id),r:x.rating};});
+    const z=calcStreaks(p.id);if(z.bw>winSt.n)winSt={id:Number(p.id),n:z.bw};if(z.bl>lossSt.n)lossSt={id:Number(p.id),n:z.bl};
+  });
+  const big=[...games].sort((a,b)=>Math.abs(Number(b.team1_score)-Number(b.team2_score))-Math.abs(Number(a.team1_score)-Number(a.team2_score)))[0];
+  let duo=null;
+  players.forEach(p=>{const x=calcRelations(p.id).bestMate;if(x&&x.g>=2){const c={a:Number(p.id),b:x.id,g:x.g,w:x.w,rate:x.w/x.g};if(!duo||c.rate>duo.rate||(c.rate===duo.rate&&c.g>duo.g))duo=c;}});
+  box.innerHTML=`
+  <div class="insight-card"><h3>🔥 Längste Siegesserie</h3><strong>${winSt.n}</strong><div>${winSt.id?esc(playerName(winSt.id)):"–"}</div></div>
+  <div class="insight-card"><h3>🥶 Längste Niederlagenserie</h3><strong>${lossSt.n}</strong><div>${lossSt.id?esc(playerName(lossSt.id)):"–"}</div></div>
+  <div class="insight-card"><h3>⚡ Höchster Skill aller Zeiten</h3><strong>${high.r.toFixed(0)}</strong><div>${high.id?esc(playerName(high.id)):"–"}</div></div>
+  <div class="insight-card"><h3>💥 Größter Sieg</h3><strong>${big.team1_score}:${big.team2_score}</strong><div class="small">Differenz ${Math.abs(Number(big.team1_score)-Number(big.team2_score))}</div></div>
+  <div class="insight-card"><h3>🤝 Stärkstes Duo</h3><strong>${duo?esc(playerName(duo.a))+" + "+esc(playerName(duo.b)):"–"}</strong><div>${duo?pct(duo.w,duo.g)+" · "+duo.w+"/"+duo.g:"Noch nicht genug Daten"}</div></div>`;
+}
+
 function calcSizeStats(){
   const s={2:{g:0,w:0},3:{g:0,w:0},4:{g:0,w:0},5:{g:0,w:0}};
   games.forEach(g=>{
@@ -391,6 +604,8 @@ function renderMixerPlayers(){
       const id=String(box.value);
       if(box.checked) selectedMixerIds.add(id);
       else selectedMixerIds.delete(id);
+      saveAttendance();
+      renderSessionStatus();
       const boxes=[...document.querySelectorAll(".mix-player")];
       const all=boxes.length&&boxes.every(b=>b.checked);
       $("selectAllBtn").textContent=all?"Auswahl aufheben":"Alle auswählen";
@@ -457,6 +672,21 @@ function repetitionScore(teams,pairCounts){
     }
   });
   return repeats;
+}
+
+function todayOpponentCounts(){
+  const today=todayKey(),counts=new Map();
+  games.forEach(g=>{
+    if(localDayKey(g.played_at)!==today)return;
+    const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number);
+    a.forEach(x=>b.forEach(y=>{const key=[x,y].sort((m,n)=>m-n).join("-");counts.set(key,(counts.get(key)||0)+1);}));
+  });return counts;
+}
+function opponentRepetitionScore(teams,counts){
+  let repeats=0;
+  for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++)teams[i].forEach(x=>teams[j].forEach(y=>{
+    const key=[Number(x),Number(y)].sort((a,b)=>a-b).join("-");repeats+=counts.get(key)||0;
+  }));return repeats;
 }
 
 function balanceScore(teams,ratings){
@@ -534,6 +764,7 @@ function mixTeams(){
   let teams;
 
   const pairCounts=todayTeammateCounts();
+  const oppCounts=todayOpponentCounts();
 
   if(modeName==="random"){
     teams=randomPartition(ids,n);
@@ -546,8 +777,9 @@ function mixTeams(){
       const t=randomPartition(ids,n);
       const balance=balanceScore(t,ratings);
       const repeats=repetitionScore(t,pairCounts);
-      const score=balance + repeats*1400;
-      candidates.push({t,score,balance,repeats});
+      const oppRepeats=opponentRepetitionScore(t,oppCounts);
+      const score=balance + repeats*1400 + oppRepeats*450;
+      candidates.push({t,score,balance,repeats,oppRepeats});
     }
     candidates.sort((a,b)=>a.score-b.score||a.repeats-b.repeats||a.balance-b.balance);
 
@@ -563,8 +795,9 @@ function mixTeams(){
   const strengths=teams.map(t=>teamStrength(t,ratings));
   const spread=Math.max(...strengths)-Math.min(...strengths);
   const repeats=repetitionScore(teams,todayTeammateCounts());
+  const oppRepeats=opponentRepetitionScore(teams,todayOpponentCounts());
   $("mixMessage").textContent=
-    `${ids.length} Spieler · ${n} Teams · Stärke-Abstand ${spread.toFixed(0)} · heutige Wiederholungen ${repeats}`;
+    `${ids.length} Spieler · ${n} Teams · Stärke-Abstand ${spread.toFixed(0)} · Mitspieler-Wdh. ${repeats} · Gegner-Wdh. ${oppRepeats}`;
 
   $("mixedTeams").innerHTML=teams.map((t,i)=>{
     const strength=teamStrength(t,ratings);
@@ -589,6 +822,19 @@ function selectAllMixer(){
     if(!all) selectedMixerIds.add(String(b.value));
   });
   $("selectAllBtn").textContent=all?"Alle auswählen":"Auswahl aufheben";
+  saveAttendance();
+  renderSessionStatus();
+}
+
+
+function setRematch(id){
+  const g=games.find(x=>String(x.id)===String(id));if(!g)return;
+  lastMixedTeams=[(g.team1_players||[]).map(Number),(g.team2_players||[]).map(Number)];
+  const ratings=calcSkillRatings();
+  $("mixedTeams").innerHTML=lastMixedTeams.map((t,i)=>`<div class="mixed-team"><h3>Team ${i+1} · ⚡ ${teamStrength(t,ratings).toFixed(0)}</h3><ul>${t.map(pid=>`<li>${esc(playerName(pid))} <span class="small">(${skillLabel(ratings[pid]||1000)} · ${(ratings[pid]||1000).toFixed(0)})</span></li>`).join("")}</ul></div>`).join("");
+  $("mixMessage").textContent="🔁 Revanche geladen – Ergebnis kann direkt eingetragen werden.";
+  renderQuickMatch();
+  $("quickMatch").scrollIntoView({behavior:"smooth",block:"center"});
 }
 
 function renderAll(){
@@ -599,6 +845,7 @@ function renderAll(){
       <td>${i+1}</td>
       <td>${esc(x.n)}</td>
       <td><b>${skillLabel(x.r)} · ${x.r.toFixed(0)}</b></td>
+      <td class="form-dots">${formHTML(x.id)}</td>
       <td>${x.g}</td><td>${x.w}</td><td>${x.l}</td>
       <td><b>${x.g?(100*x.w/x.g).toFixed(1):"0.0"} %</b></td>
       <td>${avgFor.toFixed(1)}</td>
@@ -625,9 +872,14 @@ function renderAll(){
   }).join("");
 
   $("sizeStats").innerHTML=overallSizeCards+playerSizeGroups;
-  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}</div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
+  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}<div class="history-actions"><button type="button" class="light rematch-game" data-id="${g.id}">🔁 Revanche</button></div></div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
   document.querySelectorAll(".delete-game").forEach(b=>b.addEventListener("click",()=>deleteGame(b.dataset.id)));
-  renderInputs(); renderMixerPlayers();
+  document.querySelectorAll(".rematch-game").forEach(b=>b.addEventListener("click",()=>setRematch(b.dataset.id)));
+  renderTodaySummary();
+  renderRelations();
+  renderSkillChart();
+  renderRecords();
+  renderInputs(); renderMixerPlayers(); renderSessionStatus();
 }
 
 $("addBtn").addEventListener("click",addPlayer);
@@ -637,6 +889,10 @@ $("printBtn").addEventListener("click",()=>window.print());
 $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
 $("quickSaveBtn").addEventListener("click",saveMixedGame);
+$("startSessionBtn").addEventListener("click",startSession);
+$("endSessionBtn").addEventListener("click",endSession);
+$("relationPlayer").addEventListener("change",renderRelations);
+$("chartPlayer").addEventListener("change",renderSkillChart);
 
 renderInputs();renderAll();loadData();
 </script>
