@@ -7,51 +7,334 @@
 <meta name="apple-mobile-web-app-title" content="Volleyball Statistik">
 <title>Volleyball Statistik</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#17212b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
-header{background:#102b46;color:#fff;padding:22px 16px}header h1{margin:0;font-size:24px}
-main{max-width:900px;margin:auto;padding:12px}.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #00000010}
+*{box-sizing:border-box}
+body{margin:0;background:#f3f5f7;color:#17212b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+header{background:#102b46;color:#fff;padding:22px 16px}
+header h1{margin:0;font-size:24px}
+header p{margin:5px 0 0;font-size:13px;opacity:.85}
+main{max-width:900px;margin:auto;padding:12px}
+.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #00000010}
 button,input,select{width:100%;min-height:48px;font-size:16px;border-radius:11px;padding:9px;border:1px solid #d9e0e6}
-button{background:#1266d6;color:#fff;border:0;font-weight:700;margin-top:8px}.secondary{background:#65717c}.danger{background:#a52d2d}
-.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.modes button{background:#e8eef5;color:#17212b}.modes button.active{background:#1266d6;color:white}
-.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.team{background:#f8fafb;border:1px solid #dde3e8;border-radius:12px;padding:10px}.team select{margin-bottom:7px}
-table{width:100%;border-collapse:collapse;min-width:560px}th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}th:nth-child(2),td:nth-child(2){text-align:left}.scroll{overflow-x:auto}
-.game{border:1px solid #e0e5e9;border-radius:11px;padding:10px;margin:8px 0}.small{font-size:12px;color:#68737d}
+button{background:#1266d6;color:#fff;border:0;font-weight:700;margin-top:8px}
+button:disabled{opacity:.55}
+.secondary{background:#65717c}
+.danger{background:#a52d2d}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.modes button{background:#e8eef5;color:#17212b}
+.modes button.active{background:#1266d6;color:white}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.team{background:#f8fafb;border:1px solid #dde3e8;border-radius:12px;padding:10px}
+.team select{margin-bottom:7px}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{padding:10px 6px;border-bottom:1px solid #e7ebee;text-align:center}
+th:nth-child(2),td:nth-child(2){text-align:left}
+.scroll{overflow-x:auto}
+.game{border:1px solid #e0e5e9;border-radius:11px;padding:10px;margin:8px 0}
+.small{font-size:12px;color:#68737d}
+.status{font-size:13px;margin-top:8px}
+.ok{color:#217a42} .err{color:#a52d2d}
 @media(max-width:650px){.teams{grid-template-columns:1fr}.modes{grid-template-columns:repeat(2,1fr)}}
 @media print{.entry,.tools,.history{display:none}body{background:white}.card{box-shadow:none}}
 </style>
 </head>
 <body>
-<header><h1>🏐 Volleyball Statistik</h1></header>
+<header>
+  <h1>🏐 Volleyball Statistik</h1>
+  <p>Online gespeichert · für iPhone, Tablet und PC</p>
+</header>
+
 <main>
 <section class="card entry">
 <h2>Neues Spiel</h2>
+
 <div class="modes" id="modes">
-<button data-a="2" data-b="2">2 : 2</button><button data-a="3" data-b="3">3 : 3</button>
-<button data-a="4" data-b="4">4 : 4</button><button data-a="5" data-b="5">5 : 5</button>
-<button data-a="3" data-b="4">3 : 4</button><button data-a="4" data-b="5">4 : 5</button>
+<button data-a="2" data-b="2">2 : 2</button>
+<button data-a="3" data-b="3">3 : 3</button>
+<button data-a="4" data-b="4">4 : 4</button>
+<button data-a="5" data-b="5">5 : 5</button>
+<button data-a="3" data-b="4">3 : 4</button>
+<button data-a="4" data-b="5">4 : 5</button>
 </div>
-<div class="teams"><div class="team"><h3>Team 1</h3><div id="team1"></div></div><div class="team"><h3>Team 2</h3><div id="team2"></div></div></div>
-<h3>Sieger</h3><select id="winner"><option value="1">🏆 Team 1</option><option value="2">🏆 Team 2</option></select>
-<button onclick="saveGame()">Spiel speichern</button>
+
+<div class="teams">
+  <div class="team"><h3>Team 1</h3><div id="team1"></div></div>
+  <div class="team"><h3>Team 2</h3><div id="team2"></div></div>
+</div>
+
+<h3>Sieger</h3>
+<select id="winner">
+  <option value="1">🏆 Team 1</option>
+  <option value="2">🏆 Team 2</option>
+</select>
+
+<button id="saveBtn" onclick="saveGame()">Spiel speichern</button>
+<div id="saveStatus" class="status"></div>
 </section>
-<section class="card"><h2>📊 Rangliste</h2><div class="scroll"><table><thead><tr><th>Platz</th><th>Spieler</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th></tr></thead><tbody id="stats"></tbody></table></div></section>
-<section class="card entry"><h2>👤 Spieler</h2><input id="newPlayer" placeholder="Spielername"><button onclick="addPlayer()">Spieler hinzufügen</button><p class="small" id="players"></p></section>
-<section class="card history"><h2>📜 Spielhistorie</h2><div id="history"></div></section>
-<section class="card tools"><button onclick="window.print()">🖨️ Statistik drucken</button><button class="danger" onclick="resetAll()">Alle Daten löschen</button><p class="small">Die Daten werden automatisch im Browser dieses Geräts gespeichert.</p></section>
+
+<section class="card">
+<h2>📊 Rangliste</h2>
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th>Platz</th><th>Spieler</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th>
+</tr>
+</thead>
+<tbody id="stats"></tbody>
+</table>
+</div>
+</section>
+
+<section class="card entry">
+<h2>👤 Spieler</h2>
+<input id="newPlayer" placeholder="Spielername">
+<button id="addBtn" onclick="addPlayer()">Spieler hinzufügen</button>
+<p class="small" id="players"></p>
+</section>
+
+<section class="card history">
+<h2>📜 Spielhistorie</h2>
+<div id="history"></div>
+</section>
+
+<section class="card tools">
+<button onclick="window.print()">🖨️ Statistik drucken</button>
+<button class="secondary" onclick="loadData()">🔄 Daten neu laden</button>
+<p id="connection" class="small">Verbindung wird geprüft …</p>
+</section>
 </main>
+
 <script>
-const KEY='volleyball_statistik_v3';let data=JSON.parse(localStorage.getItem(KEY)||'{"players":[],"games":[]}');let mode={a:2,b:2};
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function persist(){localStorage.setItem(KEY,JSON.stringify(data));render()}
-function addPlayer(){let e=document.getElementById('newPlayer'),n=e.value.trim();if(!n)return;if(data.players.some(x=>x.toLowerCase()==n.toLowerCase()))return alert('Spieler bereits vorhanden.');data.players.push(n);data.players.sort((a,b)=>a.localeCompare(b,'de'));e.value='';persist();inputs()}
-function opts(){return '<option value="">Spieler auswählen</option>'+data.players.map((p,i)=>`<option value="${i}">${esc(p)}</option>`).join('')}
-function inputs(){team1.innerHTML=Array.from({length:mode.a},(_,i)=>`<select id="a${i}">${opts()}</select>`).join('');team2.innerHTML=Array.from({length:mode.b},(_,i)=>`<select id="b${i}">${opts()}</select>`).join('')}
-document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#modes button').forEach(x=>x.classList.remove('active'));b.classList.add('active');mode={a:+b.dataset.a,b:+b.dataset.b};inputs()});document.querySelector('#modes button').classList.add('active');
-function vals(prefix){return [...document.querySelectorAll(`[id^="${prefix}"]`)].map(x=>x.value).filter(x=>x!=='').map(Number)}
-function saveGame(){let a=vals('a'),b=vals('b');if(a.length!=mode.a||b.length!=mode.b)return alert('Bitte alle Spieler auswählen.');if(new Set([...a,...b]).size!=a.length+b.length)return alert('Ein Spieler wurde mehrfach ausgewählt.');data.games.push({a,b,winner:+winner.value,date:new Date().toLocaleString('de-DE'),mode:`${mode.a}:${mode.b}`});persist();inputs();alert('Spiel gespeichert ✓')}
-function calc(){let m={};data.players.forEach((p,i)=>m[i]={n:p,g:0,w:0,l:0});data.games.forEach(x=>{x.a.forEach(i=>{m[i].g++;x.winner==1?m[i].w++:m[i].l++});x.b.forEach(i=>{m[i].g++;x.winner==2?m[i].w++:m[i].l++})});return Object.values(m).sort((a,b)=>(b.g?b.w/b.g:0)-(a.g?a.w/a.g:0)||b.w-a.w)}
-function render(){stats.innerHTML=calc().map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.n)}</td><td>${x.g}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.g?(100*x.w/x.g).toFixed(1):'0.0'} %</b></td></tr>`).join('');players.textContent=data.players.join(' · ')||'Noch keine Spieler.';history.innerHTML=[...data.games].reverse().map((g,r)=>`<div class="game"><b>${g.mode}</b> · ${g.date}<br>${g.a.map(i=>esc(data.players[i])).join(', ')} <b>gegen</b> ${g.b.map(i=>esc(data.players[i])).join(', ')}<br>🏆 Team ${g.winner} <button class="danger" onclick="del(${data.games.length-1-r})">Spiel löschen</button></div>`).join('')||'<p class="small">Noch keine Spiele.</p>'}
-function del(i){if(confirm('Spiel löschen?')){data.games.splice(i,1);persist()}}function resetAll(){if(confirm('Wirklich alle Daten löschen?')){data={players:[],games:[]};persist();inputs()}}
-inputs();render();
+const SUPABASE_URL = 'https://tgazutavgzxgxtjxwrhb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
+
+const headers = {
+  "apikey": SUPABASE_KEY,
+  "Authorization": "Bearer " + SUPABASE_KEY,
+  "Content-Type": "application/json"
+};
+
+let players = [];
+let games = [];
+let mode = {a:2,b:2};
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+}[c]));
+
+function api(path, options={}) {
+  return fetch(SUPABASE_URL + "/rest/v1/" + path, {
+    ...options,
+    headers: {...headers, ...(options.headers || {})}
+  });
+}
+
+async function loadData() {
+  const connection = document.getElementById("connection");
+  connection.textContent = "Daten werden geladen …";
+
+  try {
+    const [pr, gr] = await Promise.all([
+      api("players?select=id,name&order=name.asc"),
+      api("games?select=id,played_at,team1_players,team2_players,winner&order=played_at.desc")
+    ]);
+
+    if (!pr.ok) throw new Error("Spieler konnten nicht geladen werden: " + await pr.text());
+    if (!gr.ok) throw new Error("Spiele konnten nicht geladen werden: " + await gr.text());
+
+    players = await pr.json();
+    games = await gr.json();
+
+    connection.textContent = "✅ Online verbunden";
+    connection.className = "small ok";
+    render();
+    renderInputs();
+  } catch (e) {
+    connection.textContent = "❌ Verbindung fehlgeschlagen";
+    connection.className = "small err";
+    console.error(e);
+    alert("Die Verbindung zur Online-Datenbank ist fehlgeschlagen.");
+  }
+}
+
+function getPlayerById(id) {
+  return players.find(p => Number(p.id) === Number(id));
+}
+
+function optionHTML() {
+  return '<option value="">Spieler auswählen</option>' +
+    players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+}
+
+function renderInputs() {
+  document.getElementById("team1").innerHTML =
+    Array.from({length:mode.a}, (_,i)=>`<select id="a${i}">${optionHTML()}</select>`).join('');
+  document.getElementById("team2").innerHTML =
+    Array.from({length:mode.b}, (_,i)=>`<select id="b${i}">${optionHTML()}</select>`).join('');
+}
+
+document.querySelectorAll('#modes button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#modes button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    mode = {a:+b.dataset.a,b:+b.dataset.b};
+    renderInputs();
+  };
+});
+document.querySelector('#modes button').classList.add('active');
+
+async function addPlayer() {
+  const input = document.getElementById("newPlayer");
+  const name = input.value.trim();
+  if (!name) return;
+
+  if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    alert("Dieser Spieler ist bereits vorhanden.");
+    return;
+  }
+
+  const btn = document.getElementById("addBtn");
+  btn.disabled = true;
+
+  try {
+    const r = await api("players", {
+      method: "POST",
+      headers: {"Prefer":"return=representation"},
+      body: JSON.stringify({name})
+    });
+
+    if (!r.ok) throw new Error(await r.text());
+
+    input.value = "";
+    await loadData();
+  } catch(e) {
+    console.error(e);
+    alert("Spieler konnte nicht gespeichert werden.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function vals(prefix) {
+  return [...document.querySelectorAll(`[id^="${prefix}"]`)]
+    .map(x => x.value)
+    .filter(x => x !== "")
+    .map(Number);
+}
+
+async function saveGame() {
+  const a = vals("a");
+  const b = vals("b");
+
+  if (a.length !== mode.a || b.length !== mode.b) {
+    alert("Bitte alle Spieler auswählen.");
+    return;
+  }
+
+  if (new Set([...a,...b]).size !== a.length+b.length) {
+    alert("Ein Spieler wurde mehrfach ausgewählt.");
+    return;
+  }
+
+  const winner = Number(document.getElementById("winner").value);
+  const btn = document.getElementById("saveBtn");
+  const status = document.getElementById("saveStatus");
+
+  btn.disabled = true;
+  status.textContent = "Speichere …";
+  status.className = "status";
+
+  try {
+    const r = await api("games", {
+      method: "POST",
+      headers: {"Prefer":"return=minimal"},
+      body: JSON.stringify({
+        team1_players: a,
+        team2_players: b,
+        winner
+      })
+    });
+
+    if (!r.ok) throw new Error(await r.text());
+
+    status.textContent = "✅ Spiel online gespeichert";
+    status.className = "status ok";
+
+    await loadData();
+    renderInputs();
+
+    setTimeout(()=>status.textContent="", 2000);
+  } catch(e) {
+    console.error(e);
+    status.textContent = "❌ Speichern fehlgeschlagen";
+    status.className = "status err";
+    alert("Das Spiel konnte nicht gespeichert werden.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function calc() {
+  const m = {};
+
+  players.forEach(p => {
+    m[p.id] = {n:p.name,g:0,w:0,l:0};
+  });
+
+  games.forEach(g => {
+    (g.team1_players || []).forEach(id => {
+      if (!m[id]) return;
+      m[id].g++;
+      g.winner === 1 ? m[id].w++ : m[id].l++;
+    });
+
+    (g.team2_players || []).forEach(id => {
+      if (!m[id]) return;
+      m[id].g++;
+      g.winner === 2 ? m[id].w++ : m[id].l++;
+    });
+  });
+
+  return Object.values(m).sort((a,b) =>
+    (b.g ? b.w/b.g : 0) - (a.g ? a.w/a.g : 0) ||
+    b.w - a.w ||
+    a.n.localeCompare(b.n, "de")
+  );
+}
+
+function nameList(ids) {
+  return (ids || []).map(id => {
+    const p = getPlayerById(id);
+    return p ? esc(p.name) : "?";
+  }).join(", ");
+}
+
+function render() {
+  document.getElementById("stats").innerHTML = calc().map((x,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${esc(x.n)}</td>
+      <td>${x.g}</td>
+      <td>${x.w}</td>
+      <td>${x.l}</td>
+      <td><b>${x.g ? (100*x.w/x.g).toFixed(1) : "0.0"} %</b></td>
+    </tr>
+  `).join("");
+
+  document.getElementById("players").textContent =
+    players.length ? players.map(p=>p.name).join(" · ") : "Noch keine Spieler.";
+
+  document.getElementById("history").innerHTML =
+    games.length ? games.map(g => `
+      <div class="game">
+        <b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>
+        ${nameList(g.team1_players)} <b>gegen</b> ${nameList(g.team2_players)}<br>
+        🏆 Team ${g.winner}
+      </div>
+    `).join("") : '<p class="small">Noch keine Spiele.</p>';
+}
+
+loadData();
 </script>
-</body></html>
+</body>
+</html>
