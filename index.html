@@ -189,10 +189,11 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div id="mixedTeams" class="mixed-grid"></div>
 <div id="quickMatch" class="quick-match" style="display:none">
   <h3>⚡ Ergebnis aus gemischten Teams eintragen</h3>
-  <p class="small">Wähle zwei der gemischten Teams aus. Die Spieler werden automatisch übernommen. Gespielt wird bis 15, ab 14:14 mit 2 Punkten Vorsprung.</p>
-  <div class="mixer-controls">
-    <select id="quickTeamA" aria-label="Erstes Team"></select>
-    <select id="quickTeamB" aria-label="Zweites Team"></select>
+  <p class="small">Die nächste Paarung wird automatisch gewählt. Bei 3 Teams spielt ihr 1–2, danach 1–3 und danach 2–3. Bei 4 Teams spielt ihr 1–2, 3–4, danach die beiden Verlierer und anschließend die beiden Sieger. Gespielt wird bis 15, ab 14:14 mit 2 Punkten Vorsprung.</p>
+  <div id="quickNextMatch" class="insight-card" style="margin-bottom:10px">
+    <h3 style="margin:0 0 4px">Nächstes Spiel</h3>
+    <strong id="quickPairLabel">–</strong>
+    <div id="quickPairInfo" class="small"></div>
   </div>
   <div class="quick-grid">
     <div class="score-box"><label for="quickScoreA">Punkte Team A</label><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
@@ -232,7 +233,7 @@ const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
-let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[];
+let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[], quickRoundResults=[];
 let selectedMixerIds=new Set(JSON.parse(localStorage.getItem("volleyAttendance")||"[]").map(String));
 let sessionActive=localStorage.getItem("volleySessionActive")==="1";
 const $=id=>document.getElementById(id);
@@ -696,58 +697,150 @@ function balanceScore(teams,ratings){
 }
 
 
+
+function teamLabelByIndex(i){
+  const t=lastMixedTeams[i]||[];
+  return `Team ${i+1} (${t.length} Spieler)`;
+}
+
+function quickPairKey(a,b){
+  return [Number(a),Number(b)].sort((x,y)=>x-y).join("-");
+}
+
+function getQuickNextPair(){
+  const n=lastMixedTeams.length;
+  const done=new Set(quickRoundResults.map(r=>quickPairKey(r.a,r.b)));
+
+  if(n===2){
+    return done.has("0-1")?null:{a:0,b:1,stage:"Direktes Spiel"};
+  }
+
+  if(n===3){
+    const order=[[0,1],[0,2],[1,2]];
+    const pair=order.find(([a,b])=>!done.has(quickPairKey(a,b)));
+    return pair?{a:pair[0],b:pair[1],stage:"Jeder gegen jeden"}:null;
+  }
+
+  if(n===4){
+    if(!done.has("0-1")) return {a:0,b:1,stage:"Halbfinale 1"};
+    if(!done.has("2-3")) return {a:2,b:3,stage:"Halbfinale 2"};
+
+    const r1=quickRoundResults.find(r=>quickPairKey(r.a,r.b)==="0-1");
+    const r2=quickRoundResults.find(r=>quickPairKey(r.a,r.b)==="2-3");
+    if(!r1||!r2)return null;
+
+    const loser1=r1.winnerIndex===r1.a?r1.b:r1.a;
+    const winner1=r1.winnerIndex;
+    const loser2=r2.winnerIndex===r2.a?r2.b:r2.a;
+    const winner2=r2.winnerIndex;
+
+    const loserKey=quickPairKey(loser1,loser2);
+    if(!done.has(loserKey))return {a:loser1,b:loser2,stage:"Spiel der Verlierer"};
+
+    const winnerKey=quickPairKey(winner1,winner2);
+    if(!done.has(winnerKey))return {a:winner1,b:winner2,stage:"Finale der Sieger"};
+
+    return null;
+  }
+
+  // Für 5 Teams: automatisch das nächste noch offene Paar wählen.
+  for(let a=0;a<n;a++){
+    for(let b=a+1;b<n;b++){
+      if(!done.has(quickPairKey(a,b)))return {a,b,stage:"Nächstes offenes Spiel"};
+    }
+  }
+  return null;
+}
+
 function renderQuickMatch(){
   const box=$("quickMatch");
-  if(!lastMixedTeams.length){
+  if(!box)return;
+
+  if(lastMixedTeams.length<2){
     box.style.display="none";
     return;
   }
-  const opts=lastMixedTeams.map((t,i)=>`<option value="${i}">Team ${i+1} (${t.length} Spieler)</option>`).join("");
-  $("quickTeamA").innerHTML=opts;
-  $("quickTeamB").innerHTML=opts;
-  $("quickTeamA").value="0";
-  $("quickTeamB").value=lastMixedTeams.length>1?"1":"0";
+
+  box.style.display="block";
+  const pair=getQuickNextPair();
+
+  if(!pair){
+    $("quickPairLabel").textContent="✅ Alle vorgesehenen Spiele sind eingetragen";
+    $("quickPairInfo").textContent=lastMixedTeams.length===3
+      ?"Team 1–2, Team 1–3 und Team 2–3 sind vollständig."
+      : lastMixedTeams.length===4
+        ?"Team 1–2, Team 3–4, das Spiel der Verlierer und das Finale sind vollständig."
+        :"Alle vorgesehenen Paarungen sind vollständig.";
+    $("quickScoreA").value="";
+    $("quickScoreB").value="";
+    $("quickScoreA").disabled=true;
+    $("quickScoreB").disabled=true;
+    $("quickSaveBtn").disabled=true;
+    $("quickSaveBtn").textContent="✅ Spielrunde abgeschlossen";
+    return;
+  }
+
+  $("quickScoreA").disabled=false;
+  $("quickScoreB").disabled=false;
+  $("quickSaveBtn").disabled=false;
+  $("quickSaveBtn").textContent="💾 Gemischtes Spiel speichern";
+  $("quickPairLabel").textContent=`Team ${pair.a+1} gegen Team ${pair.b+1}`;
+  $("quickPairInfo").textContent=`${pair.stage} · ${teamLabelByIndex(pair.a)} gegen ${teamLabelByIndex(pair.b)}`;
   $("quickScoreA").value="";
   $("quickScoreB").value="";
-  $("quickStatus").textContent="";
-  box.style.display=lastMixedTeams.length>=2?"block":"none";
+  $("quickScoreA").placeholder="15";
+  $("quickScoreB").placeholder="12";
 }
 
 async function saveMixedGame(){
-  if(lastMixedTeams.length<2)return alert("Bitte zuerst Teams mischen.");
-  const ia=Number($("quickTeamA").value), ib=Number($("quickTeamB").value);
-  if(ia===ib)return alert("Bitte zwei unterschiedliche Teams auswählen.");
-  const a=lastMixedTeams[ia], b=lastMixedTeams[ib];
-  if(!a||!b)return alert("Die ausgewählten Teams sind nicht mehr verfügbar.");
+  const pair=getQuickNextPair();
+  if(!pair)return alert("Für diese gemischten Teams sind bereits alle vorgesehenen Spiele eingetragen.");
 
+  const a=[...lastMixedTeams[pair.a]], b=[...lastMixedTeams[pair.b]];
   const raw1=$("quickScoreA").value.trim(), raw2=$("quickScoreB").value.trim();
   if(raw1===""||raw2==="")return alert("Bitte das genaue Ergebnis für beide Teams eintragen.");
+
   const team1_score=Number(raw1), team2_score=Number(raw2);
   const scoreError=validateVolleyballScore(team1_score,team2_score);
   if(scoreError)return alert(scoreError);
+
   const winner=team1_score>team2_score?1:2;
+  const winnerIndex=winner===1?pair.a:pair.b;
 
   $("quickSaveBtn").disabled=true;
   $("quickStatus").textContent="Speichere …";
+
   try{
-    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({
-      team1_players:a,
-      team2_players:b,
-      winner,
+    const r=await api("games",{
+      method:"POST",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({
+        team1_players:a,
+        team2_players:b,
+        winner,
+        team1_score,
+        team2_score
+      })
+    });
+    if(!r.ok)throw new Error(await responseError(r));
+
+    quickRoundResults.push({
+      a:pair.a,
+      b:pair.b,
+      winnerIndex,
       team1_score,
       team2_score
-    })});
-    if(!r.ok)throw new Error(await responseError(r));
-    $("quickStatus").textContent=`✅ Team ${ia+1} gegen Team ${ib+1}: ${team1_score} : ${team2_score} gespeichert`;
+    });
+
+    $("quickStatus").textContent=`✅ Team ${pair.a+1} gegen Team ${pair.b+1}: ${team1_score} : ${team2_score} gespeichert`;
     $("quickStatus").className="status ok";
-    $("quickScoreA").value="";
-    $("quickScoreB").value="";
+
     await loadData();
+    renderQuickMatch();
   }catch(e){
     $("quickStatus").textContent="❌ Speichern fehlgeschlagen";
     $("quickStatus").className="status err";
     showDebug(e.message||String(e));
-  }finally{
     $("quickSaveBtn").disabled=false;
   }
 }
@@ -810,6 +903,7 @@ function mixTeams(){
     }</ul></div>`;
   }).join("");
   lastMixedTeams=teams.map(t=>[...t]);
+  quickRoundResults=[];
   renderQuickMatch();
 }
 
@@ -830,6 +924,7 @@ function selectAllMixer(){
 function setRematch(id){
   const g=games.find(x=>String(x.id)===String(id));if(!g)return;
   lastMixedTeams=[(g.team1_players||[]).map(Number),(g.team2_players||[]).map(Number)];
+  quickRoundResults=[];
   const ratings=calcSkillRatings();
   $("mixedTeams").innerHTML=lastMixedTeams.map((t,i)=>`<div class="mixed-team"><h3>Team ${i+1} · ⚡ ${teamStrength(t,ratings).toFixed(0)}</h3><ul>${t.map(pid=>`<li>${esc(playerName(pid))} <span class="small">(${skillLabel(ratings[pid]||1000)} · ${(ratings[pid]||1000).toFixed(0)})</span></li>`).join("")}</ul></div>`).join("");
   $("mixMessage").textContent="🔁 Revanche geladen – Ergebnis kann direkt eingetragen werden.";
