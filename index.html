@@ -103,6 +103,12 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .history-scroll::-webkit-scrollbar{width:6px}
 .history-scroll::-webkit-scrollbar-thumb{background:rgba(100,110,120,.28);border-radius:999px}
 .history-scroll::-webkit-scrollbar-track{background:transparent}
+
+.session-nav{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;-webkit-overflow-scrolling:touch}
+.session-nav button{width:auto;min-width:max-content;padding:6px 9px;margin:0;font-size:.78rem;border-radius:999px}
+.session-nav button.active{font-weight:700}
+.mix-insight{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.mix-insight span{font-size:.78rem;padding:5px 8px;border:1px solid #dde3e8;border-radius:999px}
 @media(max-width:650px){
   .teams{grid-template-columns:1fr}
   .modes{grid-template-columns:repeat(2,1fr)}
@@ -161,8 +167,9 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 </section>
 
 <section class="card">
-<h2>🏆 Heutiger Spieltag</h2>
-<p class="small">Automatische Auswertung aller heute gespeicherten Spiele.</p>
+<h2>🏆 Spieltag</h2>
+<p class="small">Alle Spiele eines Kalendertages werden automatisch zu einem Spieltag zusammengefasst.</p>
+<div id="sessionNav" class="session-nav"></div>
 <div id="todaySummary" class="dashboard-grid"></div>
 </section>
 
@@ -274,9 +281,9 @@ const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
-let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[], quickRoundResults=[], seriesWinsNeeded=2;
+let players=[], games=[], sessions=[], mode={a:2,b:2}, lastMixedTeams=[], quickRoundResults=[], seriesWinsNeeded=2;
 let selectedMixerIds=new Set(JSON.parse(localStorage.getItem("volleyAttendance")||"[]").map(String));
-let sessionActive=localStorage.getItem("volleySessionActive")==="1";
+let sessionActive=false, activeSessionId=null, viewedDayKey=null;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -297,9 +304,18 @@ async function loadData(){
   try{
     const pr=await api("players?select=id,name&order=name.asc");
     if(!pr.ok) throw new Error("players: "+await responseError(pr));
-    const gr=await api("games?select=id,played_at,team1_players,team2_players,winner,team1_score,team2_score&order=played_at.desc");
+    const gr=await api("games?select=id,played_at,team1_players,team2_players,winner,team1_score,team2_score,session_id&order=played_at.desc");
     if(!gr.ok) throw new Error("games: "+await responseError(gr));
-    players=await pr.json(); games=await gr.json();
+    const sr=await api("sessions?select=id,started_at,ended_at,player_ids&order=started_at.desc");
+    if(!sr.ok) throw new Error("sessions: "+await responseError(sr));
+    players=await pr.json(); games=await gr.json(); sessions=await sr.json();
+
+    const active=sessions.find(x=>!x.ended_at);
+    activeSessionId=active?active.id:null;
+    sessionActive=!!activeSessionId;
+    if(sessionActive && active?.started_at)viewedDayKey=localDayKey(active.started_at);
+    if(!viewedDayKey && sessions.length)viewedDayKey=localDayKey(sessions[0].started_at);
+
     $("connection").textContent="✅ Online verbunden"; $("connection").className="small ok";
     renderAll();
   }catch(e){
@@ -355,14 +371,20 @@ function validateVolleyballScore(a,b){
 
 function scoreMarginMultiplier(g){
   const a=Number(g.team1_score), b=Number(g.team2_score);
-  if(!Number.isFinite(a)||!Number.isFinite(b)||a===b) return 1;
-
-  // Knappes 15:13 / 16:14 zählt deutlich weniger als ein klarer Sieg.
-  // 15:0 liegt bei 1,50x; ein Sieg mit nur 2 Punkten Abstand ungefähr bei 0,63x.
-  const winner=Math.max(a,b);
+  if(!Number.isFinite(a)||!Number.isFinite(b)||a===b)return 1;
   const margin=Math.abs(a-b);
-  const dominance=Math.min(1, margin/Math.max(15,winner));
-  return 0.50 + dominance;
+
+  // Nur der tatsächliche Abstand zählt. Verlängerungen wie 22:20 bleiben damit knapp.
+  // 2 Punkte Abstand ≈ 0,65x; 15:0 maximal 1,50x.
+  return Math.min(1.50,0.50+Math.min(15,margin)/15);
+}
+function playerGameCountsBefore(ordered,index){
+  const c={};players.forEach(p=>c[p.id]=0);
+  for(let i=0;i<index;i++){
+    const g=ordered[i];
+    [...(g.team1_players||[]),...(g.team2_players||[])].forEach(id=>{if(c[id]!=null)c[id]++;});
+  }
+  return c;
 }
 
 async function saveGame(){
@@ -377,7 +399,7 @@ async function saveGame(){
   const winner=team1_score>team2_score?1:2;
   $("saveBtn").disabled=true; $("saveStatus").textContent="Speichere …";
   try{
-    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({team1_players:a,team2_players:b,winner,team1_score,team2_score})});
+    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({team1_players:a,team2_players:b,winner,team1_score,team2_score,session_id:activeSessionId})});
     if(!r.ok) throw new Error(await responseError(r));
     $("team1Score").value=""; $("team2Score").value="";
     $("saveStatus").textContent=`✅ Spiel ${team1_score} : ${team2_score} online gespeichert`; $("saveStatus").className="status ok";
@@ -401,20 +423,53 @@ function names(ids){return (ids||[]).map(id=>{const p=getPlayer(id);return p?esc
 function playerName(id){const p=getPlayer(id);return p?p.name:"?";}
 function pct(w,g){return g?`${(100*w/g).toFixed(1)} %`:"–";}
 function todayKey(){return localDayKey(new Date());}
-function todayGames(){const d=todayKey();return games.filter(g=>localDayKey(g.played_at)===d);}
+function sessionGames(id){return games.filter(g=>String(g.session_id||"")===String(id||""));}
 function saveAttendance(){localStorage.setItem("volleyAttendance",JSON.stringify([...selectedMixerIds]));}
 function renderSessionStatus(){
   const el=$("sessionStatus");if(!el)return;
   if(sessionActive){
-    const chosen=[...selectedMixerIds].map(Number).map(playerName).join(", ");
-    el.textContent=`Aktiv · ${selectedMixerIds.size} anwesend${chosen?": "+chosen:""}`;
-  }else el.textContent="Noch nicht gestartet.";
+    const current=sessions.find(x=>String(x.id)===String(activeSessionId));
+    const chosen=(current?.player_ids||[...selectedMixerIds]).map(Number).map(playerName).join(", ");
+    el.textContent=`Aktiv${chosen?": "+chosen:""}`;
+  }else el.textContent="Kein aktiver Spieltag.";
 }
-function startSession(){
+async function startSession(){
   if(selectedMixerIds.size<2)return alert("Bitte zuerst die anwesenden Spieler auswählen.");
-  sessionActive=true;localStorage.setItem("volleySessionActive","1");saveAttendance();renderSessionStatus();
+  if(sessionActive)return alert("Es läuft bereits ein Spieltag.");
+  try{
+    const r=await api("sessions",{
+      method:"POST",
+      headers:{Prefer:"return=representation"},
+      body:JSON.stringify({player_ids:[...selectedMixerIds].map(Number)})
+    });
+    if(!r.ok)throw new Error(await responseError(r));
+    const rows=await r.json();
+    activeSessionId=rows[0]?.id||null;
+    viewedDayKey=todayKey();
+    sessionActive=!!activeSessionId;
+    saveAttendance();
+    await loadData();
+  }catch(e){
+    alert("Spieltag konnte nicht gestartet werden.");
+    showDebug(e.message||String(e));
+  }
 }
-function endSession(){sessionActive=false;localStorage.removeItem("volleySessionActive");renderSessionStatus();}
+async function endSession(){
+  if(!sessionActive||!activeSessionId)return;
+  try{
+    const r=await api(`sessions?id=eq.${encodeURIComponent(activeSessionId)}`,{
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({ended_at:new Date().toISOString()})
+    });
+    if(!r.ok)throw new Error(await responseError(r));
+    activeSessionId=null;sessionActive=false;
+    await loadData();
+  }catch(e){
+    alert("Spieltag konnte nicht beendet werden.");
+    showDebug(e.message||String(e));
+  }
+}
 function playerGameResult(g,id){
   const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number),pid=Number(id);
   if(a.includes(pid))return g.winner===1?"W":"L";
@@ -430,28 +485,27 @@ function formHTML(id){
 
 
 function calcSkillRatings(){
-  const rating={};
-  players.forEach(p=>rating[p.id]=1000);
-
-  // Elo muss in zeitlicher Reihenfolge berechnet werden.
+  const rating={};players.forEach(p=>rating[p.id]=1000);
+  const counts={};players.forEach(p=>counts[p.id]=0);
   const ordered=[...games].sort((a,b)=>new Date(a.played_at)-new Date(b.played_at));
+
   ordered.forEach(g=>{
-    const a=(g.team1_players||[]).filter(id=>rating[id]!=null);
-    const b=(g.team2_players||[]).filter(id=>rating[id]!=null);
+    const a=(g.team1_players||[]).map(Number).filter(id=>rating[id]!=null);
+    const b=(g.team2_players||[]).map(Number).filter(id=>rating[id]!=null);
     if(!a.length||!b.length)return;
 
     const ra=a.reduce((s,id)=>s+rating[id],0)/a.length;
     const rb=b.reduce((s,id)=>s+rating[id],0)/b.length;
     const ea=1/(1+Math.pow(10,(rb-ra)/400));
     const actualA=g.winner===1?1:0;
-
-    // Das exakte Ergebnis beeinflusst die Stärke der Rating-Änderung:
-    // klare Siege zählen mehr, sehr knappe Spiele weniger.
-    const K=32;
     const marginFactor=scoreMarginMultiplier(g);
-    const delta=K*(actualA-ea)*marginFactor;
-    a.forEach(id=>rating[id]+=delta);
-    b.forEach(id=>rating[id]-=delta);
+
+    const teamAK=a.reduce((s,id)=>s+(counts[id]<8?44:32),0)/a.length;
+    const teamBK=b.reduce((s,id)=>s+(counts[id]<8?44:32),0)/b.length;
+    const baseDelta=(actualA-ea)*marginFactor;
+
+    a.forEach(id=>{rating[id]+=teamAK*baseDelta;counts[id]++;});
+    b.forEach(id=>{rating[id]-=teamBK*baseDelta;counts[id]++;});
   });
   return rating;
 }
@@ -469,18 +523,23 @@ function calcRatingTimeline(){
     const rb=b.reduce((z,id)=>z+rating[id],0)/b.length;
     const ea=1/(1+Math.pow(10,(rb-ra)/400));
     const actualA=g.winner===1?1:0;
-    const delta=32*(actualA-ea)*scoreMarginMultiplier(g);
-    a.forEach(id=>{rating[id]+=delta;history[id].push({date:g.played_at,rating:rating[id]});});
-    b.forEach(id=>{rating[id]-=delta;history[id].push({date:g.played_at,rating:rating[id]});});
-    changes.push({game:g,a,b,delta});
+    const kA=a.reduce((s,id)=>s+((history[id].length-1)<8?44:32),0)/a.length;
+    const kB=b.reduce((s,id)=>s+((history[id].length-1)<8?44:32),0)/b.length;
+    const base=(actualA-ea)*scoreMarginMultiplier(g);
+    const deltaA=kA*base,deltaB=kB*base;
+    a.forEach(id=>{rating[id]+=deltaA;history[id].push({date:g.played_at,rating:rating[id]});});
+    b.forEach(id=>{rating[id]-=deltaB;history[id].push({date:g.played_at,rating:rating[id]});});
+    changes.push({game:g,a,b,deltaA,deltaB});
   });
   return {rating,history,changes};
 }
-function dailySkillChanges(day=todayKey()){
+function dailySkillChangesForGames(gs){
+  const ids=new Set(gs.map(g=>String(g.id)));
   const out={};players.forEach(p=>out[p.id]=0);
   calcRatingTimeline().changes.forEach(c=>{
-    if(localDayKey(c.game.played_at)!==day)return;
-    c.a.forEach(id=>out[id]+=c.delta);c.b.forEach(id=>out[id]-=c.delta);
+    if(!ids.has(String(c.game.id)))return;
+    c.a.forEach(id=>out[id]+=c.deltaA);
+    c.b.forEach(id=>out[id]-=c.deltaB);
   });
   return out;
 }
@@ -566,9 +625,55 @@ function renderRelations(){
   const r=calcRelations(pid);
   $("relations").innerHTML=relationCard("🤝 Bester Mitspieler",r.bestMate)+relationCard("🎯 Lieblingsgegner",r.favOpp)+relationCard("😈 Angstgegner",r.nemesis);
 }
+
+
+function allPlayedDayKeys(){
+  const keys=new Set();
+  sessions.forEach(x=>{if(x.started_at)keys.add(localDayKey(x.started_at));});
+  games.forEach(g=>{if(g.played_at)keys.add(localDayKey(g.played_at));});
+  return [...keys].sort((a,b)=>b.localeCompare(a));
+}
+function gamesForDay(day){
+  return games.filter(g=>localDayKey(g.played_at)===day);
+}
+function renderSessionNav(){
+  const nav=$("sessionNav");if(!nav)return;
+  const days=allPlayedDayKeys();
+  if(!days.length){nav.innerHTML="";return;}
+  if(!viewedDayKey||!days.includes(viewedDayKey))viewedDayKey=days[0];
+
+  nav.innerHTML=days.map(day=>{
+    const [y,m,d]=day.split("-").map(Number);
+    const label=new Date(y,m-1,d).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"2-digit"});
+    const activeDay=sessionActive&&activeSessionId&&localDayKey(sessions.find(x=>String(x.id)===String(activeSessionId))?.started_at)===day;
+    return `<button type="button" class="light session-view ${day===viewedDayKey?"active":""}" data-day="${day}">${activeDay?"● ":""}${label}</button>`;
+  }).join("");
+
+  document.querySelectorAll(".session-view").forEach(b=>b.addEventListener("click",()=>{
+    viewedDayKey=b.dataset.day;
+    renderSessionNav();
+    renderTodaySummary();
+  }));
+}
 function renderTodaySummary(){
-  const gs=todayGames(),box=$("todaySummary");if(!box)return;
-  if(!gs.length){box.innerHTML='<div class="insight-card"><h3>Heute</h3><span class="small">Noch keine Spiele gespeichert.</span></div>';return;}
+  const box=$("todaySummary");if(!box)return;
+  const days=allPlayedDayKeys();
+  const day=viewedDayKey||days[0];
+  const gs=day?gamesForDay(day):[];
+
+  if(!day){
+    box.innerHTML='<div class="insight-card"><h3>Noch kein Spieltag</h3><span class="small">Starte zuerst einen Spieltag.</span></div>';
+    return;
+  }
+
+  const [y,m,d]=day.split("-").map(Number);
+  const title=new Date(y,m-1,d).toLocaleDateString("de-DE",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"});
+
+  if(!gs.length){
+    box.innerHTML=`<div class="insight-card"><h3>${title}</h3><span class="small">Noch keine Spiele gespeichert.</span></div>`;
+    return;
+  }
+
   const st={};players.forEach(p=>st[p.id]={id:Number(p.id),g:0,w:0,diff:0});
   gs.forEach(g=>{
     const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number);
@@ -576,18 +681,21 @@ function renderTodaySummary(){
     a.forEach(id=>{if(st[id]){st[id].g++;st[id].diff+=d1;if(g.winner===1)st[id].w++;}});
     b.forEach(id=>{if(st[id]){st[id].g++;st[id].diff+=d2;if(g.winner===2)st[id].w++;}});
   });
-  const changes=dailySkillChanges(),active=Object.values(st).filter(x=>x.g);
+
+  const changes=dailySkillChangesForGames(gs),active=Object.values(st).filter(x=>x.g);
   const mvp=[...active].sort((a,b)=>((changes[b.id]||0)+(b.w/b.g)*15+(b.diff/b.g)*1.5)-((changes[a.id]||0)+(a.w/a.g)*15+(a.diff/a.g)*1.5))[0];
   const gain=[...active].sort((a,b)=>(changes[b.id]||0)-(changes[a.id]||0))[0];
   const close=[...gs].sort((a,b)=>Math.abs(Number(a.team1_score)-Number(a.team2_score))-Math.abs(Number(b.team1_score)-Number(b.team2_score)))[0];
   const big=[...gs].sort((a,b)=>Math.abs(Number(b.team1_score)-Number(b.team2_score))-Math.abs(Number(a.team1_score)-Number(a.team2_score)))[0];
+
   box.innerHTML=`
-  <div class="insight-card"><h3>🏐 Spiele heute</h3><strong>${gs.length}</strong><div class="small">${active.length} Spieler eingesetzt</div></div>
-  <div class="insight-card"><h3>👑 MVP des Abends</h3><strong>${esc(playerName(mvp.id))}</strong><div>${mvp.w}/${mvp.g} Siege · Ø Diff. ${(mvp.diff/mvp.g>=0?"+":"")+(mvp.diff/mvp.g).toFixed(1)}</div></div>
+  <div class="insight-card"><h3>📅 ${title}</h3><strong>${gs.length} Spiele</strong><div class="small">${active.length} Spieler eingesetzt</div></div>
+  <div class="insight-card"><h3>👑 Spieltagssieger</h3><strong>${esc(playerName(mvp.id))}</strong><div>${mvp.w}/${mvp.g} Siege · Ø Diff. ${(mvp.diff/mvp.g>=0?"+":"")+(mvp.diff/mvp.g).toFixed(1)}</div></div>
   <div class="insight-card"><h3>📈 Größter Skillgewinn</h3><strong>${esc(playerName(gain.id))}</strong><div>${changes[gain.id]>=0?"+":""}${changes[gain.id].toFixed(1)} Skill</div></div>
   <div class="insight-card"><h3>🤏 Knappstes Spiel</h3><strong>${close.team1_score}:${close.team2_score}</strong><div class="small">${names(close.team1_players)} gegen ${names(close.team2_players)}</div></div>
   <div class="insight-card"><h3>💥 Deutlichster Sieg</h3><strong>${big.team1_score}:${big.team2_score}</strong><div class="small">${names(big.team1_players)} gegen ${names(big.team2_players)}</div></div>`;
 }
+
 function renderSkillChart(){
   const sel=$("chartPlayer"),box=$("skillChart");if(!sel||!box)return;
   const old=sel.value;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
@@ -682,8 +790,8 @@ function localDayKey(d){
 }
 
 function todayTeammateCounts(){
-  const today=localDayKey(new Date());
   const counts=new Map();
+  const relevant=activeSessionId?sessionGames(activeSessionId):games.filter(g=>localDayKey(g.played_at)===todayKey());
 
   const addTeam=team=>{
     const ids=(team||[]).map(Number);
@@ -695,8 +803,7 @@ function todayTeammateCounts(){
     }
   };
 
-  games.forEach(g=>{
-    if(localDayKey(g.played_at)!==today)return;
+  relevant.forEach(g=>{
     addTeam(g.team1_players);
     addTeam(g.team2_players);
   });
@@ -717,9 +824,9 @@ function repetitionScore(teams,pairCounts){
 }
 
 function todayOpponentCounts(){
-  const today=todayKey(),counts=new Map();
-  games.forEach(g=>{
-    if(localDayKey(g.played_at)!==today)return;
+  const counts=new Map();
+  const relevant=activeSessionId?sessionGames(activeSessionId):games.filter(g=>localDayKey(g.played_at)===todayKey());
+  relevant.forEach(g=>{
     const a=(g.team1_players||[]).map(Number),b=(g.team2_players||[]).map(Number);
     a.forEach(x=>b.forEach(y=>{const key=[x,y].sort((m,n)=>m-n).join("-");counts.set(key,(counts.get(key)||0)+1);}));
   });return counts;
@@ -878,7 +985,8 @@ async function saveMixedGame(){
         team2_players:b,
         winner,
         team1_score,
-        team2_score
+        team2_score,
+        session_id:activeSessionId
       })
     });
     if(!r.ok)throw new Error(await responseError(r));
@@ -948,8 +1056,9 @@ function mixTeams(){
   const spread=Math.max(...strengths)-Math.min(...strengths);
   const repeats=repetitionScore(teams,todayTeammateCounts());
   const oppRepeats=opponentRepetitionScore(teams,todayOpponentCounts());
-  $("mixMessage").textContent=
-    `${ids.length} Spieler · ${n} Teams · Stärke-Abstand ${spread.toFixed(0)} · Mitspieler-Wdh. ${repeats} · Gegner-Wdh. ${oppRepeats}`;
+  $("mixMessage").textContent=`${ids.length} Spieler · ${n} Teams`;
+  if($("mixInsight"))$("mixInsight").innerHTML=
+    `<span>⚖️ Skill-Abstand ${spread.toFixed(0)}</span><span>🤝 Mitspieler-Wdh. ${repeats}</span><span>⚔️ Gegner-Wdh. ${oppRepeats}</span>`;
 
   $("mixedTeams").innerHTML=teams.map((t,i)=>{
     const strength=teamStrength(t,ratings);
@@ -1030,6 +1139,7 @@ function renderAll(){
   $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}<div class="history-actions"><button type="button" class="light rematch-game" data-id="${g.id}">🔁 Revanche</button></div></div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
   document.querySelectorAll(".delete-game").forEach(b=>b.addEventListener("click",()=>deleteGame(b.dataset.id)));
   document.querySelectorAll(".rematch-game").forEach(b=>b.addEventListener("click",()=>setRematch(b.dataset.id)));
+  renderSessionNav();
   renderTodaySummary();
   renderRelations();
   renderSkillChart();
@@ -1054,6 +1164,7 @@ $("relationPlayer").addEventListener("change",renderRelations);
 $("chartPlayer").addEventListener("change",renderSkillChart);
 
 renderInputs();renderAll();loadData();
+setInterval(()=>loadData(),10000);
 </script>
 </body>
 </html>
