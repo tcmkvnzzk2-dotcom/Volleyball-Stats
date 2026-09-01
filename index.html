@@ -190,15 +190,25 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div id="quickMatch" class="quick-match" style="display:none">
   <h3>⚡ Ergebnis aus gemischten Teams eintragen</h3>
   <p class="small">Die nächste Paarung wird automatisch gewählt. Bei 3 Teams spielt ihr 1–2, danach 1–3 und danach 2–3. Bei 4 Teams spielt ihr 1–2, 3–4, danach die beiden Verlierer und anschließend die beiden Sieger. Gespielt wird bis 15, ab 14:14 mit 2 Punkten Vorsprung.</p>
+  <div id="bestOfControl" class="small" style="display:none;margin:0 0 10px;line-height:2.2">
+    Gewinnsätze:
+    <button type="button" class="light bestof-btn" data-wins="2" style="width:auto;padding:5px 9px;margin:0 3px">2</button>
+    <button type="button" class="light bestof-btn" data-wins="3" style="width:auto;padding:5px 9px;margin:0 3px">3</button>
+    <button type="button" class="light bestof-btn" data-wins="4" style="width:auto;padding:5px 9px;margin:0 3px">4</button>
+    <button type="button" class="light bestof-btn" data-wins="5" style="width:auto;padding:5px 9px;margin:0 3px">5</button>
+    <button type="button" class="light bestof-btn" data-wins="6" style="width:auto;padding:5px 9px;margin:0 3px">6</button>
+    <button type="button" class="light bestof-btn" data-wins="7" style="width:auto;padding:5px 9px;margin:0 3px">7</button>
+    <span id="seriesScore" style="margin-left:6px"></span>
+  </div>
   <div id="quickNextMatch" class="insight-card" style="margin-bottom:10px">
     <h3 style="margin:0 0 4px">Nächstes Spiel</h3>
     <strong id="quickPairLabel">–</strong>
     <div id="quickPairInfo" class="small"></div>
   </div>
   <div class="quick-grid">
-    <div class="score-box"><label for="quickScoreA">Punkte Team A</label><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
+    <div class="score-box"><label for="quickScoreA">Punkte Team 1</label><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
     <div class="score-sep">:</div>
-    <div class="score-box"><label for="quickScoreB">Punkte Team B</label><input id="quickScoreB" type="number" min="0" step="1" inputmode="numeric" placeholder="21"></div>
+    <div class="score-box"><label for="quickScoreB">Punkte Team 2</label><input id="quickScoreB" type="number" min="0" step="1" inputmode="numeric" placeholder="21"></div>
   </div>
   <div class="quick-actions">
     <button type="button" id="quickSaveBtn">💾 Gemischtes Spiel speichern</button>
@@ -233,7 +243,7 @@ const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
-let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[], quickRoundResults=[];
+let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[], quickRoundResults=[], seriesWinsNeeded=2;
 let selectedMixerIds=new Set(JSON.parse(localStorage.getItem("volleyAttendance")||"[]").map(String));
 let sessionActive=localStorage.getItem("volleySessionActive")==="1";
 const $=id=>document.getElementById(id);
@@ -712,7 +722,10 @@ function getQuickNextPair(){
   const done=new Set(quickRoundResults.map(r=>quickPairKey(r.a,r.b)));
 
   if(n===2){
-    return done.has("0-1")?null:{a:0,b:1,stage:"Direktes Spiel"};
+    const w0=quickRoundResults.filter(r=>r.winnerIndex===0).length;
+    const w1=quickRoundResults.filter(r=>r.winnerIndex===1).length;
+    if(w0>=seriesWinsNeeded||w1>=seriesWinsNeeded)return null;
+    return {a:0,b:1,stage:`Satz ${quickRoundResults.length+1}`};
   }
 
   if(n===3){
@@ -762,15 +775,27 @@ function renderQuickMatch(){
   }
 
   box.style.display="block";
+  const bestCtl=$("bestOfControl");
+  if(bestCtl)bestCtl.style.display=lastMixedTeams.length===2?"block":"none";
+  if(lastMixedTeams.length===2){
+    const w0=quickRoundResults.filter(r=>r.winnerIndex===0).length;
+    const w1=quickRoundResults.filter(r=>r.winnerIndex===1).length;
+    $("seriesScore").textContent=`Stand: Team 1 ${w0}:${w1} Team 2`;
+    document.querySelectorAll(".bestof-btn").forEach(b=>{
+      b.textContent=(Number(b.dataset.wins)===seriesWinsNeeded?"✓ ":"")+b.dataset.wins;
+    });
+  }
   const pair=getQuickNextPair();
 
   if(!pair){
     $("quickPairLabel").textContent="✅ Alle vorgesehenen Spiele sind eingetragen";
-    $("quickPairInfo").textContent=lastMixedTeams.length===3
-      ?"Team 1–2, Team 1–3 und Team 2–3 sind vollständig."
-      : lastMixedTeams.length===4
-        ?"Team 1–2, Team 3–4, das Spiel der Verlierer und das Finale sind vollständig."
-        :"Alle vorgesehenen Paarungen sind vollständig.";
+    $("quickPairInfo").textContent=lastMixedTeams.length===2
+      ?`Serie beendet · ${seriesWinsNeeded} Gewinnsätze erreicht. Über die kleinen Gewinnsatz-Knöpfe kannst du die Serie jederzeit verlängern.`
+      : lastMixedTeams.length===3
+        ?"Team 1–2, Team 1–3 und Team 2–3 sind vollständig."
+        : lastMixedTeams.length===4
+          ?"Team 1–2, Team 3–4, das Spiel der Verlierer und das Finale sind vollständig."
+          :"Alle vorgesehenen Paarungen sind vollständig.";
     $("quickScoreA").value="";
     $("quickScoreB").value="";
     $("quickScoreA").disabled=true;
@@ -904,6 +929,7 @@ function mixTeams(){
   }).join("");
   lastMixedTeams=teams.map(t=>[...t]);
   quickRoundResults=[];
+  seriesWinsNeeded=2;
   renderQuickMatch();
 }
 
@@ -984,6 +1010,10 @@ $("printBtn").addEventListener("click",()=>window.print());
 $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
 $("quickSaveBtn").addEventListener("click",saveMixedGame);
+document.querySelectorAll(".bestof-btn").forEach(b=>b.addEventListener("click",()=>{
+  seriesWinsNeeded=Number(b.dataset.wins);
+  renderQuickMatch();
+}));
 $("startSessionBtn").addEventListener("click",startSession);
 $("endSessionBtn").addEventListener("click",endSession);
 $("relationPlayer").addEventListener("change",renderRelations);
