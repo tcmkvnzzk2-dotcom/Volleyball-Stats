@@ -90,7 +90,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <h2>📊 Rangliste</h2>
 <div class="scroll">
 <table>
-<thead><tr><th>Platz</th><th>Spieler</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th></tr></thead>
+<thead><tr><th>Platz</th><th>Spieler</th><th>Skill</th><th>Spiele</th><th>Siege</th><th>Niederlagen</th><th>Siegquote</th></tr></thead>
 <tbody id="stats"></tbody>
 </table>
 </div>
@@ -104,7 +104,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 
 <section class="card mixer">
 <h2>🎲 Teams mischen</h2>
-<p class="small">Wähle alle Spieler aus, die heute mitspielen, und gib an, in wie viele Teams sie aufgeteilt werden sollen.</p>
+<p class="small">Wähle alle Spieler aus, die heute mitspielen. Im Modus <b>Ausgeglichen</b> nutzt die App ein Elo-ähnliches Skillrating aus euren gespeicherten Spielergebnissen und sucht möglichst gleich starke Teams.</p>
 <div id="mixerPlayers" class="player-picks"></div>
 <div class="mixer-controls">
 <button type="button" class="light" id="selectAllBtn">Alle auswählen</button>
@@ -115,7 +115,12 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <option value="5">5 Teams</option>
 </select>
 </div>
-<button type="button" id="mixBtn">🎲 Teams zufällig mischen</button>
+<select id="mixMode" aria-label="Mischmodus" style="margin-top:9px">
+<option value="balanced">⚖️ Ausgeglichen</option>
+<option value="balancedRandom">🎯 Ausgeglichen + etwas Zufall</option>
+<option value="random">🎲 Rein zufällig</option>
+</select>
+<button type="button" id="mixBtn">Teams mischen</button>
 <div id="mixMessage" class="status"></div>
 <div id="mixedTeams" class="mixed-grid"></div>
 </section>
@@ -229,13 +234,48 @@ async function deleteGame(id){
 function getPlayer(id){return players.find(p=>Number(p.id)===Number(id))}
 function names(ids){return (ids||[]).map(id=>{const p=getPlayer(id);return p?esc(p.name):"?"}).join(", ")}
 
+
+function calcSkillRatings(){
+  const rating={};
+  players.forEach(p=>rating[p.id]=1000);
+
+  // Elo muss in zeitlicher Reihenfolge berechnet werden.
+  const ordered=[...games].sort((a,b)=>new Date(a.played_at)-new Date(b.played_at));
+  ordered.forEach(g=>{
+    const a=(g.team1_players||[]).filter(id=>rating[id]!=null);
+    const b=(g.team2_players||[]).filter(id=>rating[id]!=null);
+    if(!a.length||!b.length)return;
+
+    const ra=a.reduce((s,id)=>s+rating[id],0)/a.length;
+    const rb=b.reduce((s,id)=>s+rating[id],0)/b.length;
+    const ea=1/(1+Math.pow(10,(rb-ra)/400));
+    const actualA=g.winner===1?1:0;
+
+    // Etwas höhere Lernrate am Anfang, damit neue Spieler schneller einsortiert werden.
+    const K=32;
+    const delta=K*(actualA-ea);
+    a.forEach(id=>rating[id]+=delta);
+    b.forEach(id=>rating[id]-=delta);
+  });
+  return rating;
+}
+
+function skillLabel(r){
+  if(r>=1100)return "A";
+  if(r>=1040)return "B";
+  if(r>=970)return "C";
+  if(r>=910)return "D";
+  return "E";
+}
+
 function calcPlayerStats(){
-  const m={};players.forEach(p=>m[p.id]={n:p.name,g:0,w:0,l:0});
+  const ratings=calcSkillRatings();
+  const m={};players.forEach(p=>m[p.id]={id:p.id,n:p.name,g:0,w:0,l:0,r:ratings[p.id]||1000});
   games.forEach(g=>{
     (g.team1_players||[]).forEach(id=>{if(m[id]){m[id].g++;g.winner===1?m[id].w++:m[id].l++}});
     (g.team2_players||[]).forEach(id=>{if(m[id]){m[id].g++;g.winner===2?m[id].w++:m[id].l++}});
   });
-  return Object.values(m).sort((a,b)=>(b.g?b.w/b.g:0)-(a.g?a.w/a.g:0)||b.w-a.w||a.n.localeCompare(b.n,"de"));
+  return Object.values(m).sort((a,b)=>b.r-a.r||(b.g?b.w/b.g:0)-(a.g?a.w/a.g:0)||a.n.localeCompare(b.n,"de"));
 }
 
 function calcSizeStats(){
@@ -255,17 +295,77 @@ function renderMixerPlayers(){
     <label for="mix-${p.id}">${esc(p.name)}</label></div>`).join(""):'<p class="small">Lege zuerst Spieler an.</p>';
 }
 
+function teamStrength(team,ratings){
+  if(!team.length)return 0;
+  return team.reduce((s,id)=>s+(ratings[id]||1000),0)/team.length;
+}
+
+function randomPartition(ids,n){
+  const shuffled=[...ids];
+  for(let i=shuffled.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
+  }
+  const teams=Array.from({length:n},()=>[]);
+  shuffled.forEach((id,i)=>teams[i%n].push(id));
+  return teams;
+}
+
+function balanceScore(teams,ratings){
+  const strengths=teams.map(t=>teamStrength(t,ratings));
+  const avg=strengths.reduce((a,b)=>a+b,0)/strengths.length;
+  return strengths.reduce((s,x)=>s+Math.pow(x-avg,2),0);
+}
+
 function mixTeams(){
   const ids=[...document.querySelectorAll(".mix-player:checked")].map(x=>Number(x.value));
   const n=+$("teamCount").value;
+  const modeName=$("mixMode").value;
   $("mixedTeams").innerHTML="";
   if(ids.length<2){$("mixMessage").textContent="Bitte mindestens 2 Spieler auswählen.";return;}
   if(n<2||n>ids.length){$("mixMessage").textContent="Es dürfen nicht mehr Teams als Spieler gewählt werden.";return;}
-  for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]]}
-  const teams=Array.from({length:n},()=>[]);
-  ids.forEach((id,i)=>teams[i%n].push(id));
-  $("mixMessage").textContent=`${ids.length} Spieler wurden auf ${n} Teams verteilt.`;
-  $("mixedTeams").innerHTML=teams.map((t,i)=>`<div class="mixed-team"><h3>Team ${i+1}</h3><ul>${t.map(id=>`<li>${esc(getPlayer(id)?.name||"?")}</li>`).join("")}</ul></div>`).join("");
+
+  const ratings=calcSkillRatings();
+  let teams;
+
+  if(modeName==="random"){
+    teams=randomPartition(ids,n);
+  }else{
+    // Viele mögliche Aufteilungen testen und die fairsten Kandidaten sammeln.
+    // Dadurch bleibt die Bedienung auf dem iPhone schnell.
+    const tries=Math.min(12000,Math.max(2500,ids.length*700));
+    const candidates=[];
+    for(let i=0;i<tries;i++){
+      const t=randomPartition(ids,n);
+      const score=balanceScore(t,ratings);
+      candidates.push({t,score});
+    }
+    candidates.sort((a,b)=>a.score-b.score);
+
+    if(modeName==="balancedRandom"){
+      // Zufällige Wahl aus den besten ~2 %, damit nicht immer dieselben Teams entstehen.
+      const pool=Math.max(5,Math.floor(candidates.length*0.02));
+      teams=candidates[Math.floor(Math.random()*pool)].t;
+    }else{
+      teams=candidates[0].t;
+    }
+  }
+
+  const strengths=teams.map(t=>teamStrength(t,ratings));
+  const spread=Math.max(...strengths)-Math.min(...strengths);
+  $("mixMessage").textContent=
+    `${ids.length} Spieler · ${n} Teams · Stärke-Abstand ${spread.toFixed(0)} Punkte`;
+
+  $("mixedTeams").innerHTML=teams.map((t,i)=>{
+    const strength=teamStrength(t,ratings);
+    return `<div class="mixed-team"><h3>Team ${i+1} · ⚡ ${strength.toFixed(0)}</h3><ul>${
+      t.map(id=>{
+        const p=getPlayer(id);
+        const r=ratings[id]||1000;
+        return `<li>${esc(p?.name||"?")} <span class="small">(${skillLabel(r)} · ${r.toFixed(0)})</span></li>`;
+      }).join("")
+    }</ul></div>`;
+  }).join("");
 }
 
 function selectAllMixer(){
@@ -277,7 +377,7 @@ function selectAllMixer(){
 
 function renderAll(){
   const ps=calcPlayerStats();
-  $("stats").innerHTML=ps.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.n)}</td><td>${x.g}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.g?(100*x.w/x.g).toFixed(1):"0.0"} %</b></td></tr>`).join("");
+  $("stats").innerHTML=ps.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.n)}</td><td><b>${skillLabel(x.r)} · ${x.r.toFixed(0)}</b></td><td>${x.g}</td><td>${x.w}</td><td>${x.l}</td><td><b>${x.g?(100*x.w/x.g).toFixed(1):"0.0"} %</b></td></tr>`).join("");
   $("players").textContent=players.length?players.map(p=>p.name).join(" · "):"Noch keine Spieler.";
   const ss=calcSizeStats();
   $("sizeStats").innerHTML=[2,3,4,5].map(n=>{const x=ss[n],q=x.g?(100*x.w/x.g).toFixed(1):"0.0";return `<div class="stat-card"><span>${n}er-Team</span><strong>${q} %</strong><span class="small">${x.w} Siege · ${x.g} Spiele</span></div>`}).join("");
