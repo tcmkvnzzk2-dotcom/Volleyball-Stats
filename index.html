@@ -49,6 +49,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .mixed-team{border:1px solid #dce3e8;border-radius:12px;padding:12px;background:#f8fafb}
 .mixed-team h3{margin:0 0 8px}
 .mixed-team ul{margin:0;padding-left:20px}
+.quick-match{margin-top:14px;border-top:1px solid #dde3e8;padding-top:12px}.quick-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end}.quick-grid select,.quick-grid input{min-width:0}.quick-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
 .stat-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .stat-card{border:1px solid #dde3e8;border-radius:12px;padding:11px;text-align:center;background:#fafbfc}
 .stat-card strong{display:block;font-size:22px;margin:4px 0}
@@ -111,7 +112,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 
 <section class="card mixer">
 <h2>🎲 Teams mischen</h2>
-<p class="small">Wähle alle Spieler aus, die heute mitspielen. Im Modus <b>Ausgeglichen</b> nutzt die App ein Elo-ähnliches Skillrating aus euren gespeicherten Spielergebnissen und sucht möglichst gleich starke Teams.</p>
+<p class="small">Wähle hier <b>nur die Spieler aus, die heute tatsächlich da sind</b>. Danach werden ausschließlich diese Spieler gemischt. Im Modus <b>Ausgeglichen</b> nutzt die App das Skillrating aus euren gespeicherten Ergebnissen.</p>
 <div id="mixerPlayers" class="player-picks"></div>
 <div class="mixer-controls">
 <button type="button" class="light" id="selectAllBtn">Alle auswählen</button>
@@ -130,6 +131,23 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <button type="button" id="mixBtn">Teams mischen</button>
 <div id="mixMessage" class="status"></div>
 <div id="mixedTeams" class="mixed-grid"></div>
+<div id="quickMatch" class="quick-match" style="display:none">
+  <h3>⚡ Ergebnis aus gemischten Teams eintragen</h3>
+  <p class="small">Wähle zwei der gemischten Teams aus. Die Spieler werden automatisch übernommen.</p>
+  <div class="mixer-controls">
+    <select id="quickTeamA" aria-label="Erstes Team"></select>
+    <select id="quickTeamB" aria-label="Zweites Team"></select>
+  </div>
+  <div class="quick-grid">
+    <div class="score-box"><label for="quickScoreA">Punkte Team A</label><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
+    <div class="score-sep">:</div>
+    <div class="score-box"><label for="quickScoreB">Punkte Team B</label><input id="quickScoreB" type="number" min="0" step="1" inputmode="numeric" placeholder="21"></div>
+  </div>
+  <div class="quick-actions">
+    <button type="button" id="quickSaveBtn">💾 Gemischtes Spiel speichern</button>
+  </div>
+  <div id="quickStatus" class="status"></div>
+</div>
 </section>
 
 <section class="card entry">
@@ -158,7 +176,7 @@ const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
-let players=[], games=[], mode={a:2,b:2};
+let players=[], games=[], mode={a:2,b:2}, lastMixedTeams=[], selectedMixerIds=new Set();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -303,10 +321,24 @@ function calcSizeStats(){
 }
 
 function renderMixerPlayers(){
-  const old=new Set([...document.querySelectorAll(".mix-player:checked")].map(x=>String(x.value)));
   $("mixerPlayers").innerHTML=players.length?players.map(p=>`
-    <div class="pick"><input class="mix-player" type="checkbox" id="mix-${p.id}" value="${p.id}" ${old.has(String(p.id))?"checked":""}>
+    <div class="pick"><input class="mix-player" type="checkbox" id="mix-${p.id}" value="${p.id}" ${selectedMixerIds.has(String(p.id))?"checked":""}>
     <label for="mix-${p.id}">${esc(p.name)}</label></div>`).join(""):'<p class="small">Lege zuerst Spieler an.</p>';
+
+  document.querySelectorAll(".mix-player").forEach(box=>{
+    box.addEventListener("change",()=>{
+      const id=String(box.value);
+      if(box.checked) selectedMixerIds.add(id);
+      else selectedMixerIds.delete(id);
+      const boxes=[...document.querySelectorAll(".mix-player")];
+      const all=boxes.length&&boxes.every(b=>b.checked);
+      $("selectAllBtn").textContent=all?"Auswahl aufheben":"Alle auswählen";
+    });
+  });
+
+  const boxes=[...document.querySelectorAll(".mix-player")];
+  const all=boxes.length&&boxes.every(b=>b.checked);
+  $("selectAllBtn").textContent=all?"Auswahl aufheben":"Alle auswählen";
 }
 
 function teamStrength(team,ratings){
@@ -331,8 +363,65 @@ function balanceScore(teams,ratings){
   return strengths.reduce((s,x)=>s+Math.pow(x-avg,2),0);
 }
 
+
+function renderQuickMatch(){
+  const box=$("quickMatch");
+  if(!lastMixedTeams.length){
+    box.style.display="none";
+    return;
+  }
+  const opts=lastMixedTeams.map((t,i)=>`<option value="${i}">Team ${i+1} (${t.length} Spieler)</option>`).join("");
+  $("quickTeamA").innerHTML=opts;
+  $("quickTeamB").innerHTML=opts;
+  $("quickTeamA").value="0";
+  $("quickTeamB").value=lastMixedTeams.length>1?"1":"0";
+  $("quickScoreA").value="";
+  $("quickScoreB").value="";
+  $("quickStatus").textContent="";
+  box.style.display=lastMixedTeams.length>=2?"block":"none";
+}
+
+async function saveMixedGame(){
+  if(lastMixedTeams.length<2)return alert("Bitte zuerst Teams mischen.");
+  const ia=Number($("quickTeamA").value), ib=Number($("quickTeamB").value);
+  if(ia===ib)return alert("Bitte zwei unterschiedliche Teams auswählen.");
+  const a=lastMixedTeams[ia], b=lastMixedTeams[ib];
+  if(!a||!b)return alert("Die ausgewählten Teams sind nicht mehr verfügbar.");
+
+  const raw1=$("quickScoreA").value.trim(), raw2=$("quickScoreB").value.trim();
+  if(raw1===""||raw2==="")return alert("Bitte das genaue Ergebnis für beide Teams eintragen.");
+  const team1_score=Number(raw1), team2_score=Number(raw2);
+  if(!Number.isInteger(team1_score)||!Number.isInteger(team2_score)||team1_score<0||team2_score<0)return alert("Bitte nur ganze, nicht negative Punkte eintragen.");
+  if(team1_score===team2_score)return alert("Ein Volleyballspiel kann nicht unentschieden gespeichert werden.");
+  const winner=team1_score>team2_score?1:2;
+
+  $("quickSaveBtn").disabled=true;
+  $("quickStatus").textContent="Speichere …";
+  try{
+    const r=await api("games",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({
+      team1_players:a,
+      team2_players:b,
+      winner,
+      team1_score,
+      team2_score
+    })});
+    if(!r.ok)throw new Error(await responseError(r));
+    $("quickStatus").textContent=`✅ Team ${ia+1} gegen Team ${ib+1}: ${team1_score} : ${team2_score} gespeichert`;
+    $("quickStatus").className="status ok";
+    $("quickScoreA").value="";
+    $("quickScoreB").value="";
+    await loadData();
+  }catch(e){
+    $("quickStatus").textContent="❌ Speichern fehlgeschlagen";
+    $("quickStatus").className="status err";
+    showDebug(e.message||String(e));
+  }finally{
+    $("quickSaveBtn").disabled=false;
+  }
+}
+
 function mixTeams(){
-  const ids=[...document.querySelectorAll(".mix-player:checked")].map(x=>Number(x.value));
+  const ids=[...selectedMixerIds].map(Number);
   const n=+$("teamCount").value;
   const modeName=$("mixMode").value;
   $("mixedTeams").innerHTML="";
@@ -380,12 +469,18 @@ function mixTeams(){
       }).join("")
     }</ul></div>`;
   }).join("");
+  lastMixedTeams=teams.map(t=>[...t]);
+  renderQuickMatch();
 }
 
 function selectAllMixer(){
   const boxes=[...document.querySelectorAll(".mix-player")];
   const all=boxes.length&&boxes.every(b=>b.checked);
-  boxes.forEach(b=>b.checked=!all);
+  selectedMixerIds.clear();
+  boxes.forEach(b=>{
+    b.checked=!all;
+    if(!all) selectedMixerIds.add(String(b.value));
+  });
   $("selectAllBtn").textContent=all?"Alle auswählen":"Auswahl aufheben";
 }
 
@@ -406,6 +501,7 @@ $("reloadBtn").addEventListener("click",loadData);
 $("printBtn").addEventListener("click",()=>window.print());
 $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
+$("quickSaveBtn").addEventListener("click",saveMixedGame);
 
 renderInputs();renderAll();loadData();
 </script>
