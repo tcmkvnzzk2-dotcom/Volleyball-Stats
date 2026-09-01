@@ -115,7 +115,46 @@ th:nth-child(2),td:nth-child(2){text-align:left}
   .mixed-grid{grid-template-columns:1fr}
   .stat-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@media print{.entry,.tools,.history,.mixer{display:none}body{background:white}.card{box-shadow:none}}
+@media print{
+  @page{margin:10mm}
+  body{background:#fff!important;color:#000!important;font-size:10pt}
+  body>header{display:none!important}
+  main{max-width:none!important;margin:0!important;padding:0!important}
+  main>section{display:none!important}
+  main>section.print-section{display:block!important}
+  .print-section{
+    box-shadow:none!important;
+    border:0!important;
+    padding:0!important;
+    margin:0 0 10mm!important;
+    background:#fff!important;
+  }
+  .print-section h2{margin:0 0 5mm!important;font-size:16pt}
+  .print-section .small{font-size:8.5pt}
+  .print-ranking .scroll{
+    overflow:visible!important;
+    width:100%!important;
+  }
+  .print-ranking table{
+    width:100%!important;
+    min-width:0!important;
+    border-collapse:collapse!important;
+    font-size:8pt!important;
+  }
+  .print-ranking th,.print-ranking td{
+    padding:4px 3px!important;
+    white-space:normal!important;
+  }
+  .print-teamstats .stat-cards{
+    break-inside:auto;
+    page-break-inside:auto;
+  }
+  .print-teamstats .stat-card,
+  .print-teamstats .insight-card{
+    break-inside:avoid;
+    page-break-inside:avoid;
+  }
+}
 </style>
 </head>
 <body>
@@ -150,7 +189,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <div id="saveStatus" class="status"></div>
 </section>
 
-<section class="card">
+<section class="card print-section print-ranking">
 <h2>📊 Rangliste</h2>
 <div class="scroll">
 <table>
@@ -160,7 +199,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 </div>
 </section>
 
-<section class="card">
+<section class="card print-section print-teamstats">
 <h2>📈 Siegquote nach Teamgröße</h2>
 <p class="small">Hier stehen die Quoten nach Teamgröße gesammelt. Oben siehst du die Gesamtquote aller Spiele, darunter die persönliche Siegquote jedes Spielers im 2er-, 3er-, 4er- und 5er-Team. Bei einem 3:4-Spiel wird jede Mannschaft nach ihrer eigenen Größe gewertet.</p>
 <div id="sizeStats" class="stat-cards"></div>
@@ -1150,7 +1189,16 @@ function renderAll(){
 $("addBtn").addEventListener("click",addPlayer);
 $("saveBtn").addEventListener("click",saveGame);
 $("reloadBtn").addEventListener("click",loadData);
-$("printBtn").addEventListener("click",()=>window.print());
+$("printBtn").addEventListener("click",()=>{
+  pauseAutoSync();
+  try{
+    window.print();
+  }catch(e){
+    resumeAutoSync();
+    alert("Druckansicht konnte nicht geöffnet werden.");
+  }
+  setTimeout(resumeAutoSync,1500);
+});
 $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
 $("quickSaveBtn").addEventListener("click",saveMixedGame);
@@ -1164,7 +1212,15 @@ $("relationPlayer").addEventListener("change",renderRelations);
 $("chartPlayer").addEventListener("change",renderSkillChart);
 
 renderInputs();renderAll();loadData();
-setInterval(()=>loadData(),10000);
+let autoSyncTimer=setInterval(()=>loadData(),10000);
+function pauseAutoSync(){
+  if(autoSyncTimer){clearInterval(autoSyncTimer);autoSyncTimer=null;}
+}
+function resumeAutoSync(){
+  if(!autoSyncTimer)autoSyncTimer=setInterval(()=>loadData(),10000);
+}
+window.addEventListener("beforeprint",pauseAutoSync);
+window.addEventListener("afterprint",resumeAutoSync);
 </script>
 </body>
 </html>
