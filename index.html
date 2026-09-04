@@ -109,6 +109,14 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .session-nav button.active{font-weight:700}
 .mix-insight{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .mix-insight span{font-size:.78rem;padding:5px 8px;border:1px solid #dde3e8;border-radius:999px}
+
+.late-join{margin:10px 0 4px;padding:10px 0 2px;border-top:1px solid #e1e6ea}
+.late-join-row{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;margin-top:7px;align-items:center}
+.late-join-row select,.late-join-row button{margin:0;min-width:0}
+@media(max-width:520px){
+  .late-join-row{grid-template-columns:1fr 1fr}
+  .late-join-row button{grid-column:1/-1;width:100%}
+}
 @media(max-width:650px){
   .teams{grid-template-columns:1fr}
   .modes{grid-template-columns:repeat(2,1fr)}
@@ -262,12 +270,22 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 </select>
 <button type="button" id="mixBtn">Teams mischen</button>
 <div id="mixMessage" class="status"></div>
+<div id="mixInsight" class="mix-insight"></div>
+<div id="lateJoinBox" class="late-join" style="display:none">
+  <div class="small"><strong>➕ Spieler nachträglich hinzufügen</strong></div>
+  <div class="late-join-row">
+    <select id="latePlayerSelect" aria-label="Spieler auswählen"></select>
+    <select id="lateTeamSelect" aria-label="Team auswählen"></select>
+    <button type="button" id="lateAddBtn" class="light">Hinzufügen</button>
+  </div>
+</div>
 <div id="mixedTeams" class="mixed-grid"></div>
 <div id="quickMatch" class="quick-match" style="display:none">
   <h3 class="quick-title">⚡ Ergebnis eintragen</h3>
   <div id="bestOfControl" class="bestof-compact" style="display:none">
     <span class="bestof-label">Gewinnsätze</span>
     <div class="bestof-buttons" aria-label="Benötigte Gewinnsätze">
+      <button type="button" class="light bestof-btn" data-wins="1">1</button>
       <button type="button" class="light bestof-btn" data-wins="2">2</button>
       <button type="button" class="light bestof-btn" data-wins="3">3</button>
       <button type="button" class="light bestof-btn" data-wins="4">4</button>
@@ -894,6 +912,63 @@ function quickPairKey(a,b){
   return [Number(a),Number(b)].sort((x,y)=>x-y).join("-");
 }
 
+
+function drawCurrentMixedTeams(){
+  const ratings=calcSkillRatings();
+  $("mixedTeams").innerHTML=(lastMixedTeams||[]).map((t,i)=>{
+    const strength=teamStrength(t,ratings);
+    return `<div class="mixed-team"><h3>Team ${i+1} · ⚡ ${strength.toFixed(0)}</h3><ul>${
+      t.map(id=>{
+        const p=getPlayer(id);
+        const r=ratings[id]||1000;
+        return `<li>${esc(p?.name||"?")} <span class="small">(${skillLabel(r)} · ${r.toFixed(0)})</span></li>`;
+      }).join("")
+    }</ul></div>`;
+  }).join("");
+}
+
+function renderLateJoin(){
+  const box=$("lateJoinBox"), psel=$("latePlayerSelect"), tsel=$("lateTeamSelect");
+  if(!box||!psel||!tsel)return;
+
+  if(!lastMixedTeams?.length){
+    box.style.display="none";
+    return;
+  }
+
+  const assigned=new Set(lastMixedTeams.flat().map(Number));
+  const available=players.filter(p=>!assigned.has(Number(p.id)));
+
+  if(!available.length){
+    box.style.display="none";
+    return;
+  }
+
+  psel.innerHTML=available.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  tsel.innerHTML=lastMixedTeams.map((t,i)=>`<option value="${i}">Team ${i+1} (${t.length})</option>`).join("");
+  box.style.display="block";
+}
+
+function addLatePlayer(){
+  if(!lastMixedTeams?.length)return alert("Bitte zuerst Teams mischen.");
+
+  const pid=Number($("latePlayerSelect")?.value);
+  const teamIndex=Number($("lateTeamSelect")?.value);
+
+  if(!pid || !Number.isInteger(teamIndex) || !lastMixedTeams[teamIndex])return;
+  if(lastMixedTeams.flat().map(Number).includes(pid))return alert("Dieser Spieler ist bereits einem Team zugeordnet.");
+
+  lastMixedTeams[teamIndex].push(pid);
+
+  // Auch als anwesend markieren. Bereits gespeicherte Spiele bleiben unverändert.
+  selectedMixerIds.add(String(pid));
+  saveAttendance();
+
+  drawCurrentMixedTeams();
+  renderLateJoin();
+  renderQuickMatch();
+}
+
 function getQuickNextPair(){
   const n=lastMixedTeams.length;
   const done=new Set(quickRoundResults.map(r=>quickPairKey(r.a,r.b)));
@@ -1113,6 +1188,7 @@ function mixTeams(){
   quickRoundResults=[];
   seriesWinsNeeded=2;
   renderQuickMatch();
+  renderLateJoin();
 }
 
 function selectAllMixer(){
@@ -1137,6 +1213,7 @@ function setRematch(id){
   $("mixedTeams").innerHTML=lastMixedTeams.map((t,i)=>`<div class="mixed-team"><h3>Team ${i+1} · ⚡ ${teamStrength(t,ratings).toFixed(0)}</h3><ul>${t.map(pid=>`<li>${esc(playerName(pid))} <span class="small">(${skillLabel(ratings[pid]||1000)} · ${(ratings[pid]||1000).toFixed(0)})</span></li>`).join("")}</ul></div>`).join("");
   $("mixMessage").textContent="🔁 Revanche geladen – Ergebnis kann direkt eingetragen werden.";
   renderQuickMatch();
+  renderLateJoin();
   $("quickMatch").scrollIntoView({behavior:"smooth",block:"center"});
 }
 
@@ -1192,6 +1269,7 @@ $("reloadBtn").addEventListener("click",loadData);
 $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
 $("quickSaveBtn").addEventListener("click",saveMixedGame);
+$("lateAddBtn").addEventListener("click",addLatePlayer);
 document.querySelectorAll(".bestof-btn").forEach(b=>b.addEventListener("click",()=>{
   seriesWinsNeeded=Number(b.dataset.wins);
   renderQuickMatch();
