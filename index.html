@@ -433,7 +433,7 @@ body.print-view-open{overflow:hidden;}
 <section class="card tools">
 <h2>Verbindung</h2>
 <button class="secondary" id="reloadBtn">🔄 Daten neu laden</button>
-<button id="printBtn" type="button" onclick="openPrintView()">🖨️ Statistik drucken</button>
+<button id="printBtn" type="button" onclick="exportStatsFile()">📄 Statistik-Datei erstellen</button>
 <div class="backup-actions">
   <button type="button" class="secondary" id="backupBtn">💾 Backup herunterladen</button>
 </div>
@@ -1627,6 +1627,95 @@ document.getElementById("closePrintView")?.addEventListener("click",closePrintVi
 document.getElementById("nativePrintBtn")?.addEventListener("click",()=>{
   setTimeout(()=>window.print(),50);
 });
+
+
+// v21: mobile-friendly statistics export as standalone HTML file.
+// On iPhone/iPad the Share Sheet is used when supported, so "Save to Files"
+// can be chosen directly. Fallback: normal browser download.
+async function exportStatsFile(){
+  const ranking=document.querySelector(".print-ranking");
+  const teamstats=document.querySelector(".print-teamstats");
+
+  if(!ranking || !teamstats){
+    alert("Die Statistik konnte gerade nicht erstellt werden.");
+    return;
+  }
+
+  const cleanClone=(section)=>{
+    const copy=section.cloneNode(true);
+    copy.querySelectorAll("button,input,select,textarea").forEach(el=>el.remove());
+    return copy.innerHTML;
+  };
+
+  const now=new Date();
+  const dateText=now.toLocaleDateString("de-DE");
+  const fileDate=[
+    now.getFullYear(),
+    String(now.getMonth()+1).padStart(2,"0"),
+    String(now.getDate()).padStart(2,"0")
+  ].join("-");
+
+  const html=`<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volleyball-Statistik ${dateText}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:0;background:#f5f7f9;color:#111}
+  main{max-width:980px;margin:0 auto;padding:18px}
+  .head{background:#fff;border-radius:16px;padding:16px;margin-bottom:14px;border:1px solid #e2e7eb}
+  h1{font-size:24px;margin:0 0 5px}
+  h2{font-size:19px;margin:18px 0 10px}
+  h3{font-size:16px}
+  .small{font-size:12px;color:#667}
+  section{background:#fff;border:1px solid #e2e7eb;border-radius:16px;padding:14px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 6px;border-bottom:1px solid #e6eaed;text-align:left;vertical-align:top}
+  th{font-weight:700}
+  .dashboard-grid,.team-size-grid,.stats-grid,.cards,.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+  .card,.stat-card,.team-size-card{border:1px solid #e2e7eb;border-radius:12px;padding:10px;background:#fff}
+  @media(max-width:600px){main{padding:10px}table{font-size:11px}th,td{padding:6px 4px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <h1>🏐 Volleyball-Statistik</h1>
+    <div class="small">Erstellt am ${dateText}</div>
+  </div>
+  <section>${cleanClone(ranking)}</section>
+  <section>${cleanClone(teamstats)}</section>
+</main>
+</body>
+</html>`;
+
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  const filename=`Volleyball-Statistik-${fileDate}.html`;
+
+  try{
+    const file=new File([blob],filename,{type:"text/html"});
+    if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
+      await navigator.share({
+        files:[file],
+        title:"Volleyball-Statistik",
+        text:"Aktuelle Volleyball-Statistik"
+      });
+      return;
+    }
+  }catch(e){
+    if(e && e.name==="AbortError") return;
+  }
+
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
 
 </script>
 
