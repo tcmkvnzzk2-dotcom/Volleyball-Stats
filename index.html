@@ -179,6 +179,50 @@ th:nth-child(2),td:nth-child(2){text-align:left}
     page-break-inside:avoid;
   }
 }
+
+/* v20: separate iPhone-friendly print view */
+#printView{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:99999;
+  background:#fff;
+  color:#111;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#printView.open{display:block;}
+#printViewBar{
+  position:sticky;
+  top:0;
+  z-index:2;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px;
+  background:#fff;
+  border-bottom:1px solid #ddd;
+}
+#printViewBar button{width:auto;margin:0;}
+#printViewContent{padding:16px;max-width:1000px;margin:0 auto;}
+#printViewContent .print-copy{margin-bottom:22px;}
+#printViewContent table{width:100%;border-collapse:collapse;font-size:12px;}
+#printViewContent th,#printViewContent td{padding:6px;border-bottom:1px solid #ddd;text-align:left;}
+body.print-view-open{overflow:hidden;}
+
+@media print{
+  body > *:not(#printView){display:none !important;}
+  #printView{
+    display:block !important;
+    position:static !important;
+    overflow:visible !important;
+  }
+  #printViewBar{display:none !important;}
+  #printViewContent{padding:0 !important;max-width:none !important;}
+  #printViewContent .print-copy{break-inside:avoid;}
+}
+
 </style>
 </head>
 <body>
@@ -389,7 +433,7 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 <section class="card tools">
 <h2>Verbindung</h2>
 <button class="secondary" id="reloadBtn">🔄 Daten neu laden</button>
-<button id="printBtn" type="button" onclick="window.print()">🖨️ Statistik drucken</button>
+<button id="printBtn" type="button" onclick="openPrintView()">🖨️ Statistik drucken</button>
 <div class="backup-actions">
   <button type="button" class="secondary" id="backupBtn">💾 Backup herunterladen</button>
 </div>
@@ -1536,6 +1580,64 @@ function resumeAutoSync(){
 }
 window.addEventListener("beforeprint",pauseAutoSync);
 window.addEventListener("afterprint",resumeAutoSync);
+
+// v20: dedicated print view, isolated from the live app.
+function openPrintView(){
+  const view=document.getElementById("printView");
+  const content=document.getElementById("printViewContent");
+  if(!view||!content) return;
+
+  const ranking=document.querySelector(".print-ranking");
+  const teamstats=document.querySelector(".print-teamstats");
+  content.innerHTML="";
+
+  [ranking,teamstats].forEach(section=>{
+    if(!section) return;
+    const copy=section.cloneNode(true);
+    copy.classList.add("print-copy");
+    copy.querySelectorAll("button,input,select,textarea").forEach(el=>el.remove());
+    content.appendChild(copy);
+  });
+
+  view.classList.add("open");
+  view.setAttribute("aria-hidden","false");
+  document.body.classList.add("print-view-open");
+  if(typeof autoSyncTimer!=="undefined" && autoSyncTimer){
+    clearInterval(autoSyncTimer);
+    autoSyncTimer=null;
+  }
+}
+
+function closePrintView(){
+  const view=document.getElementById("printView");
+  if(view){
+    view.classList.remove("open");
+    view.setAttribute("aria-hidden","true");
+  }
+  document.body.classList.remove("print-view-open");
+  if(typeof autoSyncTimer!=="undefined" && !autoSyncTimer){
+    autoSyncTimer=setInterval(()=>{
+      const retroOpen=document.getElementById("retroForm") && document.getElementById("retroForm").style.display!=="none";
+      if(!retroOpen) loadData();
+    },10000);
+  }
+}
+
+document.getElementById("closePrintView")?.addEventListener("click",closePrintView);
+document.getElementById("nativePrintBtn")?.addEventListener("click",()=>{
+  setTimeout(()=>window.print(),50);
+});
+
 </script>
+
+<div id="printView" aria-hidden="true">
+  <div id="printViewBar">
+    <button type="button" id="closePrintView">← Zurück</button>
+    <strong>Druckansicht</strong>
+    <button type="button" id="nativePrintBtn">🖨️ Drucken</button>
+  </div>
+  <div id="printViewContent"></div>
+</div>
+
 </body>
 </html>
