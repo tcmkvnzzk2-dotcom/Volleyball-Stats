@@ -603,6 +603,7 @@ main{max-width:1180px}
 </main>
 <script>
 const SUPABASE_REST = 'https://tgazutavgzxgxtjxwrhb.supabase.co/rest/v1';
+const SUPABASE_FUNCTIONS = 'https://tgazutavgzxgxtjxwrhb.supabase.co/functions/v1';
 const SUPABASE_KEY = 'sb_publishable_KMfpl2_kPzYLPqPSwbwq5Q_yzOxb1Zc';
 const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 
@@ -750,12 +751,49 @@ async function saveGame(){
 }
 
 async function deleteGame(id){
-  if(!confirm("Dieses Spiel wirklich löschen? Es wird sofort aus der Statistik entfernt."))return;
+  if(!confirm("Dieses Spiel wirklich löschen?")) return;
+
+  const password=prompt("🔒 Lösch-Passwort eingeben:");
+  if(password===null) return;
+  if(!password.trim()){
+    alert("Bitte das Lösch-Passwort eingeben.");
+    return;
+  }
+
   try{
-    const r=await api(`games?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});
-    if(!r.ok) throw new Error(await responseError(r));
+    const r=await fetch(SUPABASE_FUNCTIONS+"/delete-game",{
+      method:"POST",
+      mode:"cors",
+      headers:{
+        "apikey":SUPABASE_KEY,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({
+        game_id:id,
+        password:password
+      })
+    });
+
+    if(r.status===401){
+      alert("❌ Falsches Lösch-Passwort.");
+      return;
+    }
+
+    if(!r.ok){
+      let msg="Das Spiel konnte nicht gelöscht werden.";
+      try{
+        const data=await r.json();
+        if(data&&data.error)msg=data.error;
+      }catch(_){}
+      throw new Error(msg);
+    }
+
+    alert("✅ Ergebnis gelöscht.");
     await loadData();
-  }catch(e){alert("Das Spiel konnte nicht gelöscht werden.");showDebug(e.message||String(e));}
+  }catch(e){
+    alert("Das Spiel konnte nicht gelöscht werden.");
+    showDebug(e.message||String(e));
+  }
 }
 
 function getPlayer(id){return players.find(p=>Number(p.id)===Number(id))}
