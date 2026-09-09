@@ -1723,6 +1723,27 @@ $("endSessionBtn").addEventListener("click",endSession);
 $("relationPlayer").addEventListener("change",renderRelations);
 $("chartPlayer").addEventListener("change",renderSkillChart);
 
+
+function updateDashboardSummary(){
+  try{
+    const activePlayers=players.filter(p=>games.some(g=>(g.team1_players||[]).includes(p.id)||(g.team2_players||[]).includes(p.id)));
+    let best={name:"–",pct:0};
+    players.forEach(p=>{
+      const pg=games.filter(g=>(g.team1_players||[]).includes(p.id)||(g.team2_players||[]).includes(p.id));
+      if(!pg.length)return;
+      const wins=pg.filter(g=>(g.winner===1&&(g.team1_players||[]).includes(p.id))||(g.winner===2&&(g.team2_players||[]).includes(p.id))).length;
+      const pct=wins/pg.length*100;
+      if(pct>best.pct)best={name:p.name,pct};
+    });
+    if($("sumPlayers"))$("sumPlayers").textContent=activePlayers.length||players.length;
+    if($("sumGames"))$("sumGames").textContent=games.length;
+    if($("sumBest"))$("sumBest").textContent=best.pct?best.pct.toFixed(1)+" %":"0.0 %";
+    if($("sumBestName"))$("sumBestName").textContent=best.name;
+  }catch(e){
+    console.warn("Dashboard-Zusammenfassung konnte nicht aktualisiert werden",e);
+  }
+}
+
 renderInputs();renderAll();updateDashboardSummary();loadData();
 let autoSyncTimer=setInterval(()=>{
   const retroOpen=$("retroForm") && $("retroForm").style.display!=="none";
