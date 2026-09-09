@@ -781,8 +781,19 @@ function retroModeSizes(){
 }
 function renderRetroInputs(){
   const {a,b}=retroModeSizes();
+
+  const oldA=[...document.querySelectorAll(".retro-a")].map(x=>x.value);
+  const oldB=[...document.querySelectorAll(".retro-b")].map(x=>x.value);
+
   if($("retroTeam1"))$("retroTeam1").innerHTML=Array.from({length:a},(_,i)=>`<select class="retro-a" aria-label="Team 1 Spieler ${i+1}">${optionHTML()}</select>`).join("");
   if($("retroTeam2"))$("retroTeam2").innerHTML=Array.from({length:b},(_,i)=>`<select class="retro-b" aria-label="Team 2 Spieler ${i+1}">${optionHTML()}</select>`).join("");
+
+  [...document.querySelectorAll(".retro-a")].forEach((el,i)=>{
+    if(oldA[i] && [...el.options].some(o=>o.value===oldA[i])) el.value=oldA[i];
+  });
+  [...document.querySelectorAll(".retro-b")].forEach((el,i)=>{
+    if(oldB[i] && [...el.options].some(o=>o.value===oldB[i])) el.value=oldB[i];
+  });
 }
 function setRetroDateFromViewedDay(){
   if($("retroDate"))$("retroDate").value=viewedDayKey||todayKey();
@@ -1477,7 +1488,9 @@ function renderAll(){
   renderSkillChart();
   renderRecords();
   renderInputs(); renderMixerPlayers(); renderSessionStatus();
-  if($("retroForm")&&$("retroForm").style.display!=="none"){setRetroDateFromViewedDay();renderRetroInputs();}
+  if($("retroForm")&&$("retroForm").style.display!=="none"){
+    renderRetroInputs();
+  }
 }
 
 $("addBtn").addEventListener("click",addPlayer);
@@ -1508,12 +1521,18 @@ $("relationPlayer").addEventListener("change",renderRelations);
 $("chartPlayer").addEventListener("change",renderSkillChart);
 
 renderInputs();renderAll();loadData();
-let autoSyncTimer=setInterval(()=>loadData(),10000);
+let autoSyncTimer=setInterval(()=>{
+  const retroOpen=$("retroForm") && $("retroForm").style.display!=="none";
+  if(!retroOpen) loadData();
+},10000);
 function pauseAutoSync(){
   if(autoSyncTimer){clearInterval(autoSyncTimer);autoSyncTimer=null;}
 }
 function resumeAutoSync(){
-  if(!autoSyncTimer)autoSyncTimer=setInterval(()=>loadData(),10000);
+  if(!autoSyncTimer)autoSyncTimer=setInterval(()=>{
+    const retroOpen=$("retroForm") && $("retroForm").style.display!=="none";
+    if(!retroOpen) loadData();
+  },10000);
 }
 window.addEventListener("beforeprint",pauseAutoSync);
 window.addEventListener("afterprint",resumeAutoSync);
