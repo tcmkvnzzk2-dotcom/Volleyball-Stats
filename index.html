@@ -1304,6 +1304,62 @@ function repetitionScore(teams,pairCounts){
   return repeats;
 }
 
+// Langzeit-Gedächtnis für den Mixer:
+// Die letzten Spiele zählen zusätzlich zum aktuellen Spieltag.
+// Neuere gemeinsame Spiele wiegen stärker; häufige Duos werden überproportional bestraft.
+function recentPairCounts(limit=30){
+  const teammate=new Map(), opponent=new Map();
+  const ordered=[...games]
+    .sort((a,b)=>new Date(b.played_at)-new Date(a.played_at))
+    .slice(0,limit);
+
+  ordered.forEach((g,index)=>{
+    const recency=1-(index/Math.max(1,limit))*0.55; // neu: 1.0, älter: bis ca. 0.45
+    const a=(g.team1_players||[]).map(Number);
+    const b=(g.team2_players||[]).map(Number);
+
+    const addTeam=team=>{
+      for(let i=0;i<team.length;i++)for(let j=i+1;j<team.length;j++){
+        const key=[team[i],team[j]].sort((x,y)=>x-y).join("-");
+        teammate.set(key,(teammate.get(key)||0)+recency);
+      }
+    };
+    addTeam(a); addTeam(b);
+
+    a.forEach(x=>b.forEach(y=>{
+      const key=[x,y].sort((m,n)=>m-n).join("-");
+      opponent.set(key,(opponent.get(key)||0)+recency);
+    }));
+  });
+  return {teammate,opponent};
+}
+
+function weightedTeammatePenalty(teams,todayCounts,recentCounts){
+  let penalty=0;
+  teams.forEach(team=>{
+    for(let i=0;i<team.length;i++)for(let j=i+1;j<team.length;j++){
+      const key=[Number(team[i]),Number(team[j])].sort((a,b)=>a-b).join("-");
+      const today=todayCounts.get(key)||0;
+      const recent=recentCounts.get(key)||0;
+      // Wiederholungen heute sind besonders unerwünscht.
+      // Langfristig steigt der Malus überproportional, damit feste Duos aufgebrochen werden.
+      penalty += today*2.5 + recent + Math.pow(recent,1.55)*0.75;
+    }
+  });
+  return penalty;
+}
+
+function weightedOpponentPenalty(teams,todayCounts,recentCounts){
+  let penalty=0;
+  for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++){
+    teams[i].forEach(x=>teams[j].forEach(y=>{
+      const key=[Number(x),Number(y)].sort((a,b)=>a-b).join("-");
+      penalty += (todayCounts.get(key)||0)*1.5 + (recentCounts.get(key)||0)*0.45;
+    }));
+  }
+  return penalty;
+}
+
 function todayOpponentCounts(){
   const counts=new Map();
   const relevant=activeSessionId?sessionGames(activeSessionId):games.filter(g=>localDayKey(g.played_at)===todayKey());
@@ -1670,27 +1726,35 @@ function mixTeams(){
 
   const pairCounts=todayTeammateCounts();
   const oppCounts=todayOpponentCounts();
+  const recentCounts=recentPairCounts(30);
 
   if(modeName==="random"){
     teams=randomPartition(ids,n);
   }else{
-    // Viele mögliche Aufteilungen testen. Wiederholte Mitspieler-Paarungen von heute
-    // bekommen einen weichen Malus; Skill-Ausgeglichenheit bleibt ebenfalls wichtig.
-    const tries=Math.min(12000,Math.max(2500,ids.length*700));
+    // Verbesserter Fairness-Mixer:
+    // 1. Skill bleibt wichtig.
+    // 2. Häufige Mitspieler aus den letzten 30 Spielen werden deutlich getrennt.
+    // 3. Wiederholungen am aktuellen Spieltag werden besonders stark vermieden.
+    // 4. Gegner-Wiederholungen zählen schwächer als Mitspieler-Wiederholungen.
+    const tries=Math.min(20000,Math.max(5000,ids.length*1100));
     const candidates=[];
     for(let i=0;i<tries;i++){
       const t=randomPartition(ids,n);
       const balance=balanceScore(t,ratings);
-      const repeats=repetitionScore(t,pairCounts);
-      const oppRepeats=opponentRepetitionScore(t,oppCounts);
-      const score=balance + repeats*1400 + oppRepeats*450;
-      candidates.push({t,score,balance,repeats,oppRepeats});
+      const matePenalty=weightedTeammatePenalty(t,pairCounts,recentCounts.teammate);
+      const opponentPenalty=weightedOpponentPenalty(t,oppCounts,recentCounts.opponent);
+
+      // Skill und Abwechslung werden gemeinsam optimiert.
+      // Der hohe Mitspieler-Faktor verhindert, dass mathematisch passende Duos
+      // (z.B. immer dieselben zwei Spieler) ständig zusammen landen.
+      const score=balance + matePenalty*2100 + opponentPenalty*300;
+      candidates.push({t,score,balance,matePenalty,opponentPenalty});
     }
-    candidates.sort((a,b)=>a.score-b.score||a.repeats-b.repeats||a.balance-b.balance);
+    candidates.sort((a,b)=>a.score-b.score||a.matePenalty-b.matePenalty||a.balance-b.balance);
 
     if(modeName==="balancedRandom"){
-      // Zufällige Wahl aus den besten ~2 %, damit zusätzlich etwas Variation bleibt.
-      const pool=Math.max(5,Math.floor(candidates.length*0.02));
+      // Etwas Zufall nur innerhalb einer kleinen Spitzengruppe guter Lösungen.
+      const pool=Math.max(5,Math.min(80,Math.floor(candidates.length*0.01)));
       teams=candidates[Math.floor(Math.random()*pool)].t;
     }else{
       teams=candidates[0].t;
