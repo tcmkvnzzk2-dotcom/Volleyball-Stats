@@ -513,6 +513,7 @@ main{max-width:1180px}
 <div id="mixerPlayers" class="player-picks"></div>
 <div class="mixer-controls">
 <button type="button" class="light" id="selectAllBtn">Alle auswählen</button>
+<div id="selectedPlayerCount" class="small" style="font-weight:800;align-self:center;white-space:nowrap">👥 0 Spieler ausgewählt</div>
 <select id="teamCount" aria-label="Anzahl Teams">
 <option value="2">2 Teams</option>
 <option value="3">3 Teams</option>
@@ -534,6 +535,13 @@ main{max-width:1180px}
     <select id="latePlayerSelect" aria-label="Spieler auswählen"></select>
     <select id="lateTeamSelect" aria-label="Team auswählen"></select>
     <button type="button" id="lateAddBtn" class="light">Hinzufügen</button>
+  </div>
+</div>
+<div id="lateRemoveBox" class="late-join" style="display:none">
+  <div class="small"><strong>➖ Spieler aus Team entfernen</strong> · bereits gespeicherte Spiele bleiben unverändert</div>
+  <div class="late-join-row">
+    <select id="removePlayerSelect" aria-label="Spieler aus Team auswählen"></select>
+    <button type="button" id="removePlayerBtn" class="light">Entfernen</button>
   </div>
 </div>
 <div id="mixedTeams" class="mixed-grid"></div>
@@ -1208,6 +1216,13 @@ function calcSizeStats(){
   return s;
 }
 
+function updateSelectedPlayerCount(){
+  const el=$("selectedPlayerCount");
+  if(!el)return;
+  const n=selectedMixerIds.size;
+  el.textContent=`👥 ${n} ${n===1?"Spieler":"Spieler"} ausgewählt`;
+}
+
 function renderMixerPlayers(){
   $("mixerPlayers").innerHTML=players.length?players.map(p=>`
     <div class="pick"><input class="mix-player" type="checkbox" id="mix-${p.id}" value="${p.id}" ${selectedMixerIds.has(String(p.id))?"checked":""}>
@@ -1223,12 +1238,14 @@ function renderMixerPlayers(){
       const boxes=[...document.querySelectorAll(".mix-player")];
       const all=boxes.length&&boxes.every(b=>b.checked);
       $("selectAllBtn").textContent=all?"Auswahl aufheben":"Alle auswählen";
+      updateSelectedPlayerCount();
     });
   });
 
   const boxes=[...document.querySelectorAll(".mix-player")];
   const all=boxes.length&&boxes.every(b=>b.checked);
   $("selectAllBtn").textContent=all?"Auswahl aufheben":"Alle auswählen";
+  updateSelectedPlayerCount();
 }
 
 function teamStrength(team,ratings){
@@ -1373,6 +1390,58 @@ function addLatePlayer(){
 
   drawCurrentMixedTeams();
   renderLateJoin();
+  renderLateRemove();
+  renderTeamReorder();
+  renderQuickMatch();
+}
+
+function renderLateRemove(){
+  const box=$("lateRemoveBox"), psel=$("removePlayerSelect");
+  if(!box||!psel)return;
+
+  if(!lastMixedTeams?.length){
+    box.style.display="none";
+    return;
+  }
+
+  const options=[];
+  lastMixedTeams.forEach((team,teamIndex)=>{
+    team.forEach(pid=>{
+      options.push(`<option value="${teamIndex}:${Number(pid)}">Team ${teamIndex+1} · ${esc(playerName(pid))}</option>`);
+    });
+  });
+
+  if(!options.length){
+    box.style.display="none";
+    return;
+  }
+
+  psel.innerHTML=options.join("");
+  box.style.display="block";
+}
+
+function removeLatePlayer(){
+  if(!lastMixedTeams?.length)return alert("Bitte zuerst Teams mischen.");
+
+  const raw=$("removePlayerSelect")?.value||"";
+  const [teamRaw,pidRaw]=raw.split(":");
+  const teamIndex=Number(teamRaw), pid=Number(pidRaw);
+  if(!Number.isInteger(teamIndex)||!pid||!lastMixedTeams[teamIndex])return;
+
+  if(lastMixedTeams[teamIndex].length<=1){
+    return alert(`Team ${teamIndex+1} kann nicht leer werden. Bitte zuerst einen anderen Spieler hinzufügen oder neu mischen.`);
+  }
+
+  const name=playerName(pid);
+  if(!confirm(`${name} wirklich aus Team ${teamIndex+1} entfernen?\n\nBereits gespeicherte Spiele werden dadurch nicht verändert.`))return;
+
+  lastMixedTeams[teamIndex]=lastMixedTeams[teamIndex].filter(id=>Number(id)!==pid);
+
+  // Der Spieler bleibt weiterhin als "anwesend/ausgewählt" markiert.
+  // Nur die aktuelle Teamzusammenstellung wird geändert.
+  drawCurrentMixedTeams();
+  renderLateJoin();
+  renderLateRemove();
   renderTeamReorder();
   renderQuickMatch();
 }
@@ -1410,6 +1479,7 @@ function swapMixedTeams(){
 
   drawCurrentMixedTeams();
   renderLateJoin();
+  renderLateRemove();
   renderTeamReorder();
   renderQuickMatch();
 }
@@ -1650,6 +1720,7 @@ function mixTeams(){
   seriesWinsNeeded=2;
   renderQuickMatch();
   renderLateJoin();
+  renderLateRemove();
   renderTeamReorder();
 }
 
@@ -1664,6 +1735,7 @@ function selectAllMixer(){
   $("selectAllBtn").textContent=all?"Alle auswählen":"Auswahl aufheben";
   saveAttendance();
   renderSessionStatus();
+  updateSelectedPlayerCount();
 }
 
 
@@ -1676,6 +1748,7 @@ function setRematch(id){
   $("mixMessage").textContent="🔁 Revanche geladen – Ergebnis kann direkt eingetragen werden.";
   renderQuickMatch();
   renderLateJoin();
+  renderLateRemove();
   renderTeamReorder();
   $("quickMatch").scrollIntoView({behavior:"smooth",block:"center"});
 }
@@ -1757,6 +1830,7 @@ $("mixBtn").addEventListener("click",mixTeams);
 $("selectAllBtn").addEventListener("click",selectAllMixer);
 $("quickSaveBtn").addEventListener("click",saveMixedGame);
 $("lateAddBtn").addEventListener("click",addLatePlayer);
+$("removePlayerBtn").addEventListener("click",removeLatePlayer);
 $("swapTeamsBtn").addEventListener("click",swapMixedTeams);
 $("toggleRetroBtn").addEventListener("click",()=>{
   const f=$("retroForm");
