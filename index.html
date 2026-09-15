@@ -353,6 +353,12 @@ main{max-width:1180px}
 }
 
 </style>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#d71920">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FSG Volleyball">
+<link rel="apple-touch-icon" href="./icon-180.png">
 </head>
 <body>
 <header class="club-header">
@@ -2065,6 +2071,9 @@ th:nth-child(2),td:nth-child(2){text-align:left;font-weight:600}
 <div class="date">Stand: ${dateText}</div>
 <div class="table-wrap">${table.outerHTML}</div>
 </main>
+<script>
+if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(console.warn));
+</script>
 </body>
 </html>`;
 
