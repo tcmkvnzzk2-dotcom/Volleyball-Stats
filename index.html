@@ -566,9 +566,9 @@ main{max-width:1180px}
     <span id="quickPairInfo" class="small"></span>
   </div>
   <div class="quick-grid">
-    <div class="score-box"><label for="quickScoreA">Punkte Team 1</label><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
+    <div class="score-box"><label id="quickScoreALabel" for="quickScoreA">Punkte Team 1</label><div id="quickScoreAPlayers" class="small"></div><input id="quickScoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="25"></div>
     <div class="score-sep">:</div>
-    <div class="score-box"><label for="quickScoreB">Punkte Team 2</label><input id="quickScoreB" type="number" min="0" step="1" inputmode="numeric" placeholder="21"></div>
+    <div class="score-box"><label id="quickScoreBLabel" for="quickScoreB">Punkte Team 2</label><div id="quickScoreBPlayers" class="small"></div><input id="quickScoreB" type="number" min="0" step="1" inputmode="numeric" placeholder="21"></div>
   </div>
   <div class="quick-actions">
     <button type="button" id="quickSaveBtn">💾 Gemischtes Spiel speichern</button>
@@ -1498,6 +1498,10 @@ function renderQuickMatch(){
           :"Alle vorgesehenen Paarungen sind vollständig.";
     $("quickScoreA").value="";
     $("quickScoreB").value="";
+    $("quickScoreALabel").textContent="Punkte Team –";
+    $("quickScoreBLabel").textContent="Punkte Team –";
+    $("quickScoreAPlayers").textContent="";
+    $("quickScoreBPlayers").textContent="";
     $("quickScoreA").disabled=true;
     $("quickScoreB").disabled=true;
     $("quickSaveBtn").disabled=true;
@@ -1511,6 +1515,18 @@ function renderQuickMatch(){
   $("quickSaveBtn").textContent="💾 Gemischtes Spiel speichern";
   $("quickPairLabel").textContent=`Team ${pair.a+1} gegen Team ${pair.b+1}`;
   $("quickPairInfo").textContent=pair.stage;
+
+  // v27: Die Ergebnisfelder sind immer sichtbar an genau die oben angezeigte Paarung gekoppelt.
+  // Dadurch steht z. B. bei Team 2 gegen Team 3 unten ebenfalls Punkte Team 2 / Punkte Team 3.
+  const quickTeamA=lastMixedTeams[pair.a]||[];
+  const quickTeamB=lastMixedTeams[pair.b]||[];
+  $("quickScoreALabel").textContent=`Punkte Team ${pair.a+1}`;
+  $("quickScoreBLabel").textContent=`Punkte Team ${pair.b+1}`;
+  $("quickScoreAPlayers").textContent=quickTeamA.map(playerName).join(", ");
+  $("quickScoreBPlayers").textContent=quickTeamB.map(playerName).join(", ");
+  $("quickScoreA").setAttribute("aria-label",`Punkte Team ${pair.a+1}: ${quickTeamA.map(playerName).join(", ")}`);
+  $("quickScoreB").setAttribute("aria-label",`Punkte Team ${pair.b+1}: ${quickTeamB.map(playerName).join(", ")}`);
+
   $("quickScoreA").value="";
   $("quickScoreB").value="";
   $("quickScoreA").placeholder="15";
