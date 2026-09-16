@@ -65,6 +65,16 @@ th:nth-child(2),td:nth-child(2){text-align:left}
 .skill-chart svg{width:100%;height:auto;display:block}
 .history-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .history-actions button{width:auto;margin:0;padding:7px 10px;font-size:.85rem}
+
+.skill-details{margin-top:6px}
+.skill-details summary{cursor:pointer;list-style:none;font-size:.84rem;font-weight:700;color:#555;user-select:none}
+.skill-details summary::-webkit-details-marker{display:none}
+.skill-details summary::before{content:"▸ ";color:#c51622}
+.skill-details[open] summary::before{content:"▾ "}
+.skill-detail-box{margin-top:7px;padding:8px 10px;background:#f7f7f8;border:1px solid #e7e7e9;border-radius:9px;font-size:.79rem;line-height:1.45;color:#444}
+.skill-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px}
+.skill-detail-final{margin-top:6px;padding-top:6px;border-top:1px solid #ddd;font-weight:700}
+
 .player-size-group{margin-top:14px;padding-top:12px;border-top:1px solid #dde3e8}
 .player-size-group h3{margin:0 0 8px}
 .player-size-list{display:grid;gap:7px}
@@ -628,6 +638,12 @@ const BASE_HEADERS = {"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
 let players=[], games=[], sessions=[], mode={a:2,b:2}, lastMixedTeams=[], quickRoundResults=[], seriesWinsNeeded=2;
 let selectedMixerIds=new Set(JSON.parse(localStorage.getItem("volleyAttendance")||"[]").map(String));
 let sessionActive=false, activeSessionId=null, viewedDayKey=null;
+let lastDataFingerprint="";
+let ratingTimelineCache=null, ratingTimelineCacheKey="";
+let selectedRelationPlayer=localStorage.getItem("volleyRelationPlayer")||"";
+let selectedChartPlayer=localStorage.getItem("volleyChartPlayer")||"";
+function dataFingerprint(p,g,se){return JSON.stringify([p,g,se]);}
+function ratingCacheKey(){return JSON.stringify(games.map(g=>[g.id,g.played_at,g.team1_players,g.team2_players,g.winner,g.team1_score,g.team2_score]));}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -646,13 +662,19 @@ function showDebug(msg){ $("debugBox").innerHTML=`<div class="warn small"><b>Tec
 async function loadData(){
   $("connection").textContent="Daten werden geladen …"; $("connection").className="small"; $("debugBox").innerHTML="";
   try{
-    const pr=await api("players?select=id,name&order=name.asc");
+    const [pr,gr,sr]=await Promise.all([
+      api("players?select=id,name&order=name.asc"),
+      api("games?select=id,played_at,team1_players,team2_players,winner,team1_score,team2_score,session_id&order=played_at.desc"),
+      api("sessions?select=id,started_at,ended_at,player_ids&order=started_at.desc")
+    ]);
     if(!pr.ok) throw new Error("players: "+await responseError(pr));
-    const gr=await api("games?select=id,played_at,team1_players,team2_players,winner,team1_score,team2_score,session_id&order=played_at.desc");
     if(!gr.ok) throw new Error("games: "+await responseError(gr));
-    const sr=await api("sessions?select=id,started_at,ended_at,player_ids&order=started_at.desc");
     if(!sr.ok) throw new Error("sessions: "+await responseError(sr));
-    players=await pr.json(); games=await gr.json(); sessions=await sr.json();
+    const newPlayers=await pr.json(), newGames=await gr.json(), newSessions=await sr.json();
+    const fp=dataFingerprint(newPlayers,newGames,newSessions);
+    const changed=fp!==lastDataFingerprint;
+    players=newPlayers; games=newGames; sessions=newSessions;
+    if(changed){lastDataFingerprint=fp;ratingTimelineCache=null;ratingTimelineCacheKey="";}
 
     const active=sessions.find(x=>!x.ended_at);
     activeSessionId=active?active.id:null;
@@ -661,7 +683,7 @@ async function loadData(){
     if(!viewedDayKey && sessions.length)viewedDayKey=localDayKey(sessions[0].started_at);
 
     $("connection").textContent="✅ Online verbunden"; $("connection").className="small ok";
-    renderAll();updateDashboardSummary();
+    if(changed){renderAll();updateDashboardSummary();}
   }catch(e){
     console.error(e); $("connection").textContent="❌ Verbindung zur Online-Datenbank fehlgeschlagen"; $("connection").className="small err"; showDebug(e.message||String(e));
   }
@@ -908,6 +930,8 @@ function calcSkillRatings(){
 }
 
 function calcRatingTimeline(){
+  const cacheKey=ratingCacheKey();
+  if(ratingTimelineCache&&ratingTimelineCacheKey===cacheKey)return ratingTimelineCache;
   const rating={};players.forEach(p=>rating[p.id]=1000);
   const history={};players.forEach(p=>history[p.id]=[{date:null,rating:1000}]);
   const changes=[];
@@ -926,9 +950,35 @@ function calcRatingTimeline(){
     const deltaA=kA*base,deltaB=kB*base;
     a.forEach(id=>{rating[id]+=deltaA;history[id].push({date:g.played_at,rating:rating[id]});});
     b.forEach(id=>{rating[id]-=deltaB;history[id].push({date:g.played_at,rating:rating[id]});});
-    changes.push({game:g,a,b,deltaA,deltaB});
+    changes.push({game:g,a,b,deltaA,deltaB,team1Before:ra,team2Before:rb,expectedA:ea,marginFactor:scoreMarginMultiplier(g),kA,kB});
   });
-  return {rating,history,changes};
+  ratingTimelineCache={rating,history,changes};
+  ratingTimelineCacheKey=cacheKey;
+  return ratingTimelineCache;
+}
+function skillChangeForGame(gameId){
+  return calcRatingTimeline().changes.find(c=>String(c.game.id)===String(gameId))||null;
+}
+function skillChangeHTML(g){
+  const c=skillChangeForGame(g.id);if(!c)return "";
+  const d1=c.deltaA, d2=-c.deltaB;
+  const f=n=>(n>=0?"+":"")+n.toFixed(1);
+  const p1=(c.expectedA*100).toFixed(0), p2=(100-c.expectedA*100).toFixed(0);
+  const k1=Number(c.kA).toFixed(0), k2=Number(c.kB).toFixed(0);
+  const mf=Number(c.marginFactor).toFixed(2).replace(".",",");
+  return `<details class="skill-details">
+    <summary>⚡ Skilländerung: Team 1 ${f(d1)} · Team 2 ${f(d2)}</summary>
+    <div class="skill-detail-box">
+      <div class="skill-detail-grid">
+        <span>Team-Skill vorher</span><b>${Math.round(c.team1Before)} : ${Math.round(c.team2Before)}</b>
+        <span>Erwartung</span><b>${p1}% : ${p2}%</b>
+        <span>Ergebnisfaktor</span><b>×${mf}</b>
+        <span>K-Faktor</span><b>${k1} : ${k2}</b>
+      </div>
+      <div class="skill-detail-final">Je Spieler: Team 1 ${f(d1)} · Team 2 ${f(d2)}</div>
+      <div style="margin-top:4px;color:#777">Die Anzeige erklärt die bestehende Berechnung; historische Ergebnisse und Skillwerte werden nicht verändert.</div>
+    </div>
+  </details>`;
 }
 function dailySkillChangesForGames(gs){
   const ids=new Set(gs.map(g=>String(g.id)));
@@ -1015,9 +1065,10 @@ function relationCard(title,x){
 }
 function renderRelations(){
   const sel=$("relationPlayer");if(!sel)return;
-  const old=sel.value;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  if(old&&players.some(p=>String(p.id)===old))sel.value=old;
+  const old=sel.value||selectedRelationPlayer;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  if(old&&players.some(p=>String(p.id)===String(old)))sel.value=old;
   const pid=Number(sel.value||players[0]?.id);
+  if(pid){selectedRelationPlayer=String(pid);localStorage.setItem("volleyRelationPlayer",selectedRelationPlayer);}
   if(!pid){$("relations").innerHTML='<span class="small">Noch keine Spieler.</span>';return;}
   const r=calcRelations(pid);
   $("relations").innerHTML=relationCard("🤝 Bester Mitspieler",r.bestMate)+relationCard("🎯 Lieblingsgegner",r.favOpp)+relationCard("😈 Angstgegner",r.nemesis);
@@ -1180,9 +1231,10 @@ function renderTodaySummary(){
 
 function renderSkillChart(){
   const sel=$("chartPlayer"),box=$("skillChart");if(!sel||!box)return;
-  const old=sel.value;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  if(old&&players.some(p=>String(p.id)===old))sel.value=old;
+  const old=sel.value||selectedChartPlayer;sel.innerHTML=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  if(old&&players.some(p=>String(p.id)===String(old)))sel.value=old;
   const pid=Number(sel.value||players[0]?.id);
+  if(pid){selectedChartPlayer=String(pid);localStorage.setItem("volleyChartPlayer",selectedChartPlayer);}
   if(!pid){box.innerHTML='<span class="small">Noch keine Spieler.</span>';return;}
   const arr=calcRatingTimeline().history[pid]||[{rating:1000}];
   const W=640,H=190,pad=26,vals=arr.map(x=>x.rating),min=Math.min(...vals,950)-10,max=Math.max(...vals,1050)+10;
@@ -1883,7 +1935,7 @@ function renderAll(){
   }).join("");
 
   $("sizeStats").innerHTML=overallSizeCards+playerSizeGroups;
-  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}<div class="history-actions"><button type="button" class="light rematch-game" data-id="${g.id}">🔁 Revanche</button></div></div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
+  $("history").innerHTML=games.length?games.map(g=>`<div class="game"><div class="game-head"><div><b>${new Date(g.played_at).toLocaleString("de-DE")}</b><br>${names(g.team1_players)} <b>gegen</b> ${names(g.team2_players)}<br><b>Ergebnis: ${g.team1_score} : ${g.team2_score}</b> · 🏆 Team ${g.winner}${skillChangeHTML(g)}<div class="history-actions"><button type="button" class="light rematch-game" data-id="${g.id}">🔁 Revanche</button></div></div><button class="danger delete-game" data-id="${g.id}">🗑️</button></div></div>`).join(""):'<p class="small">Noch keine Spiele.</p>';
   document.querySelectorAll(".delete-game").forEach(b=>b.addEventListener("click",()=>deleteGame(b.dataset.id)));
   document.querySelectorAll(".rematch-game").forEach(b=>b.addEventListener("click",()=>setRematch(b.dataset.id)));
   renderSessionNav();
@@ -1922,8 +1974,8 @@ document.querySelectorAll(".bestof-btn").forEach(b=>b.addEventListener("click",(
 }));
 $("startSessionBtn").addEventListener("click",startSession);
 $("endSessionBtn").addEventListener("click",endSession);
-$("relationPlayer").addEventListener("change",renderRelations);
-$("chartPlayer").addEventListener("change",renderSkillChart);
+$("relationPlayer").addEventListener("change",()=>{selectedRelationPlayer=$("relationPlayer").value;localStorage.setItem("volleyRelationPlayer",selectedRelationPlayer);renderRelations();});
+$("chartPlayer").addEventListener("change",()=>{selectedChartPlayer=$("chartPlayer").value;localStorage.setItem("volleyChartPlayer",selectedChartPlayer);renderSkillChart();});
 
 
 function updateDashboardSummary(){
