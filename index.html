@@ -506,6 +506,19 @@ main{max-width:1180px}
 <div id="relations" class="dashboard-grid"></div>
 </section>
 
+<section class="card" id="headToHeadCard">
+<h2>⚔️ Head to Head</h2>
+<div class="relation-controls">
+  <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
+    <select id="h2hPlayerA" aria-label="Erster Spieler"></select>
+    <b style="text-align:center">VS</b>
+    <select id="h2hPlayerB" aria-label="Zweiter Spieler"></select>
+  </div>
+  <div class="small">Vergleicht zwei Spieler über alle gespeicherten Spiele – inklusive direkter Duelle und gemeinsamer Spiele.</div>
+</div>
+<div id="headToHead" class="dashboard-grid"></div>
+</section>
+
 <section class="card">
 <h2>📈 Skill-Verlauf</h2>
 <div class="chart-controls">
@@ -642,6 +655,8 @@ let lastDataFingerprint="";
 let ratingTimelineCache=null, ratingTimelineCacheKey="";
 let selectedRelationPlayer=localStorage.getItem("volleyRelationPlayer")||"";
 let selectedChartPlayer=localStorage.getItem("volleyChartPlayer")||"";
+let selectedH2HA=localStorage.getItem("volleyH2HA")||"";
+let selectedH2HB=localStorage.getItem("volleyH2HB")||"";
 function dataFingerprint(p,g,se){return JSON.stringify([p,g,se]);}
 function ratingCacheKey(){return JSON.stringify(games.map(g=>[g.id,g.played_at,g.team1_players,g.team2_players,g.winner,g.team1_score,g.team2_score]));}
 const $=id=>document.getElementById(id);
@@ -1227,6 +1242,61 @@ function renderTodaySummary(){
   <div class="insight-card"><h3>📈 Größter Skillgewinn</h3><strong>${esc(playerName(gain.id))}</strong><div>${changes[gain.id]>=0?"+":""}${changes[gain.id].toFixed(1)} Skill</div></div>
   <div class="insight-card"><h3>🤏 Knappstes Spiel</h3><strong>${close.team1_score}:${close.team2_score}</strong><div class="small">${names(close.team1_players)} gegen ${names(close.team2_players)}</div></div>
   <div class="insight-card"><h3>💥 Deutlichster Sieg</h3><strong>${big.team1_score}:${big.team2_score}</strong><div class="small">${names(big.team1_players)} gegen ${names(big.team2_players)}</div></div>`;
+}
+
+function renderHeadToHead(){
+  const aSel=$("h2hPlayerA"),bSel=$("h2hPlayerB"),box=$("headToHead");
+  if(!aSel||!bSel||!box)return;
+  const opts=players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  const oldA=aSel.value||selectedH2HA, oldB=bSel.value||selectedH2HB;
+  aSel.innerHTML=opts;bSel.innerHTML=opts;
+  if(oldA&&players.some(p=>String(p.id)===String(oldA)))aSel.value=oldA;
+  if(oldB&&players.some(p=>String(p.id)===String(oldB)))bSel.value=oldB;
+  if(!aSel.value&&players[0])aSel.value=String(players[0].id);
+  if(!bSel.value&&players[1])bSel.value=String(players[1].id);
+  if(aSel.value===bSel.value&&players.length>1){
+    const other=players.find(p=>String(p.id)!==aSel.value);if(other)bSel.value=String(other.id);
+  }
+  const a=Number(aSel.value),b=Number(bSel.value);
+  if(!a||!b||a===b){box.innerHTML='<div class="insight-card"><span class="small">Bitte zwei unterschiedliche Spieler auswählen.</span></div>';return;}
+  selectedH2HA=String(a);selectedH2HB=String(b);
+  localStorage.setItem("volleyH2HA",selectedH2HA);localStorage.setItem("volleyH2HB",selectedH2HB);
+
+  const ps=calcPlayerStats(),sa=ps.find(x=>x.id===a),sb=ps.find(x=>x.id===b);
+  const ratings=calcSkillRatings();
+  let direct=0,aw=0,bw=0,aPts=0,bPts=0,together=0,togetherWins=0,togetherDiff=0;
+  const recent=[];
+  games.forEach(g=>{
+    const t1=(g.team1_players||[]).map(Number),t2=(g.team2_players||[]).map(Number);
+    const a1=t1.includes(a),a2=t2.includes(a),b1=t1.includes(b),b2=t2.includes(b);
+    if((a1&&b2)||(a2&&b1)){
+      direct++;
+      const aTeam=a1?1:2,bTeam=b1?1:2;
+      if(g.winner===aTeam)aw++;else if(g.winner===bTeam)bw++;
+      aPts+=a1?Number(g.team1_score)||0:Number(g.team2_score)||0;
+      bPts+=b1?Number(g.team1_score)||0:Number(g.team2_score)||0;
+      recent.push({g,aWon:g.winner===aTeam});
+    }else if((a1&&b1)||(a2&&b2)){
+      together++;
+      const team=a1?1:2;
+      const win=g.winner===team;if(win)togetherWins++;
+      togetherDiff+=(team===1?Number(g.team1_score)-Number(g.team2_score):Number(g.team2_score)-Number(g.team1_score));
+    }
+  });
+  const pct=x=>x?`${(100*x.w/x.g).toFixed(1)} %`:"0.0 %";
+  const leader=aw===bw?"Unentschieden":aw>bw?playerName(a):playerName(b);
+  const directPctA=direct?(100*aw/direct).toFixed(1):"0.0";
+  const directPctB=direct?(100*bw/direct).toFixed(1):"0.0";
+  const last=recent.slice(0,5).map(x=>`<span title="${new Date(x.g.played_at).toLocaleDateString("de-DE")}">${x.aWon?"🟢":"🔴"}</span>`).join(" ")||"–";
+  box.innerHTML=`
+    <div class="insight-card"><h3>🏅 Gesamtbilanz</h3><strong>${esc(playerName(a))} ${sa.w}/${sa.g} · ${esc(playerName(b))} ${sb.w}/${sb.g}</strong><div class="small">Siegquote: ${pct(sa)} vs. ${pct(sb)}</div></div>
+    <div class="insight-card"><h3>⚡ Aktueller Skill</h3><strong>${Math.round(ratings[a]||1000)} : ${Math.round(ratings[b]||1000)}</strong><div class="small">${skillLabel(ratings[a]||1000)} vs. ${skillLabel(ratings[b]||1000)}</div></div>
+    <div class="insight-card"><h3>⚔️ Direkte Duelle</h3><strong>${aw} : ${bw}</strong><div class="small">${direct} Spiele · ${directPctA}% : ${directPctB}%</div></div>
+    <div class="insight-card"><h3>👑 H2H-Führung</h3><strong>${esc(leader)}</strong><div class="small">${direct?`Punkte gesamt ${aPts}:${bPts}`:"Noch kein direktes Duell"}</div></div>
+    <div class="insight-card"><h3>🤝 Gemeinsam im Team</h3><strong>${togetherWins}/${together} Siege</strong><div class="small">${together?`${(100*togetherWins/together).toFixed(1)} % · Ø Punktediff. ${(togetherDiff/together>=0?"+":"")+(togetherDiff/together).toFixed(1)}`:"Noch nie zusammen gespielt"}</div></div>
+    <div class="insight-card"><h3>📊 Punktebilanz gesamt</h3><strong>${sa.pf-sa.pa>=0?"+":""}${sa.pf-sa.pa} : ${sb.pf-sb.pa>=0?"+":""}${sb.pf-sb.pa}</strong><div class="small">Punktedifferenz über alle Spiele</div></div>
+    <div class="insight-card"><h3>🔥 Form letzte 5</h3><strong>${formHTML(a)}</strong><div class="small">${esc(playerName(a))}</div><strong>${formHTML(b)}</strong><div class="small">${esc(playerName(b))}</div></div>
+    <div class="insight-card"><h3>🆚 Letzte direkten Duelle</h3><strong>${last}</strong><div class="small">Aus Sicht von ${esc(playerName(a))} · grün = Sieg</div></div>`;
 }
 
 function renderSkillChart(){
@@ -1941,6 +2011,7 @@ function renderAll(){
   renderSessionNav();
   renderTodaySummary();
   renderRelations();
+  renderHeadToHead();
   renderSkillChart();
   renderRecords();
   renderInputs(); renderMixerPlayers(); renderSessionStatus();
@@ -1976,6 +2047,8 @@ $("startSessionBtn").addEventListener("click",startSession);
 $("endSessionBtn").addEventListener("click",endSession);
 $("relationPlayer").addEventListener("change",()=>{selectedRelationPlayer=$("relationPlayer").value;localStorage.setItem("volleyRelationPlayer",selectedRelationPlayer);renderRelations();});
 $("chartPlayer").addEventListener("change",()=>{selectedChartPlayer=$("chartPlayer").value;localStorage.setItem("volleyChartPlayer",selectedChartPlayer);renderSkillChart();});
+$("h2hPlayerA").addEventListener("change",()=>{selectedH2HA=$("h2hPlayerA").value;localStorage.setItem("volleyH2HA",selectedH2HA);renderHeadToHead();});
+$("h2hPlayerB").addEventListener("change",()=>{selectedH2HB=$("h2hPlayerB").value;localStorage.setItem("volleyH2HB",selectedH2HB);renderHeadToHead();});
 
 
 function updateDashboardSummary(){
